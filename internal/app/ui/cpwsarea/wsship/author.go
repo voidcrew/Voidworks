@@ -7,6 +7,7 @@ import (
 
 	"github.com/SpaiR/imgui-go"
 	"sdmm/internal/app/ui/cpwsarea/wsmap/tools"
+	"sdmm/internal/app/ui/workshop"
 	"sdmm/internal/app/window"
 	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/imguiext/style"
@@ -434,7 +435,9 @@ func (ws *WsShip) regionControls() {
 		hint("This project's game code does not support custom room shapes yet. Rooms must be rectangles.")
 	}
 	if reason := tools.RoomShapeRejection(); reason != "" {
-		imgui.TextColored(style.Amber, reason)
+		imgui.PushStyleColor(imgui.StyleColorText, style.Amber)
+		workshop.Wrapped(reason)
+		imgui.PopStyleColor()
 	}
 	if !tools.IsSelected(tools.TNRoomShape) {
 		if _, _, ready := tools.SelectionBounds(); ready {
@@ -459,7 +462,7 @@ func (ws *WsShip) regionControls() {
 		if strings.TrimSpace(ws.itemName) != "" && nameErr != nil {
 			hint(nameErr.Error())
 		}
-		label = "Make this an upgrade room"
+		label = "Create room"
 	}
 	space()
 	imgui.BeginDisabledV(!valid)

@@ -239,7 +239,7 @@ func (ws *WsShip) roomMenu(slot string, options int) {
 			ws.pendingDelete = ""
 		}
 	} else if imgui.SelectableV("Delete room...", false, imgui.SelectableFlagsDontClosePopups, imgui.Vec2{}) {
-		ws.pendingDelete = key
+		ws.pendingDelete, ws.pendingShown = key, true
 	}
 }
 
@@ -283,7 +283,7 @@ func (ws *WsShip) optionMenu(slot string, m ship.Module, options int) {
 			ws.pendingDelete = ""
 		}
 	} else if imgui.SelectableV("Delete option...", false, imgui.SelectableFlagsDontClosePopups, imgui.Vec2{}) {
-		ws.pendingDelete = key
+		ws.pendingDelete, ws.pendingShown = key, true
 	}
 	imgui.EndDisabled()
 	if blocked != "" {

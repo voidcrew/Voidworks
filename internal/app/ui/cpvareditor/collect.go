@@ -39,7 +39,7 @@ func collectVariablesNames0(vars *dmvars.Variables) []string {
 }
 
 func collectVariablesPaths(obj *dmenv.Object) (variablesPaths []string) {
-	for {
+	for obj != nil {
 		variablesPaths = append(variablesPaths, obj.Path)
 		obj = obj.Parent()
 		if obj == nil {

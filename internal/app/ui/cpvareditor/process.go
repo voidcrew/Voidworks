@@ -18,7 +18,10 @@ import (
 )
 
 func (v *VarEditor) Process(int32) {
-	if len(v.variablesNames) == 0 {
+	if v.prefab != nil && v.app.LoadedEnvironment().Objects[v.prefab.Path()] == nil {
+		imgui.TextWrapped("This type is missing from the loaded project. Its mapped variables are preserved.")
+	}
+	if v.prefab == nil {
 		imgui.TextDisabled("No instance/prefab selected")
 		return
 	}

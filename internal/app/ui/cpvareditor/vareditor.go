@@ -120,6 +120,11 @@ func (v *VarEditor) setup(prefab *dmmprefab.Prefab) {
 	v.variablesNames = collectVariablesNames(prefab.Vars())
 	v.variablesPaths = collectVariablesPaths(v.app.LoadedEnvironment().Objects[v.prefab.Path()])
 	v.variablesNamesByPaths = collectVariablesNamesByPaths(v.app.LoadedEnvironment(), v.variablesPaths)
+	if len(v.variablesPaths) == 0 {
+		// Unknown types still carry mapped overrides; keep those visible in both views.
+		v.variablesPaths = []string{prefab.Path()}
+		v.variablesNamesByPaths[prefab.Path()] = append([]string(nil), v.variablesNames...)
+	}
 
 	// Clear pinned variables from the common list, since they are showed separately.
 	for _, pinnedVarName := range v.config().PinnedVarNames {
@@ -206,7 +211,10 @@ func (v *VarEditor) resetSession() {
 }
 
 func (v *VarEditor) initialVarValue(varName string) string {
-	return v.app.LoadedEnvironment().Objects[v.prefab.Path()].Vars.ValueV(varName, dmvars.NullValue)
+	if obj := v.app.LoadedEnvironment().Objects[v.prefab.Path()]; obj != nil {
+		return obj.Vars.ValueV(varName, dmvars.NullValue)
+	}
+	return dmvars.NullValue
 }
 
 func (v *VarEditor) isReadOnly(varName string) bool {

@@ -328,7 +328,7 @@ func (ws *WsShip) variantOptionMenu(themeID string, m ship.Module, o ship.Option
 		}
 	} else if imgui.SelectableV("Use shared room", false, confirmFlags(confirm), imgui.Vec2{}) {
 		if confirm {
-			ws.pendingDelete = key
+			ws.pendingDelete, ws.pendingShown = key, true
 		} else {
 			ws.unforkOption(m.ID, themeID)
 		}
@@ -389,7 +389,7 @@ func (ws *WsShip) variantMenu(t ship.Theme) {
 			ws.pendingDelete = ""
 		}
 	} else if imgui.SelectableV("Delete variant...", false, imgui.SelectableFlagsDontClosePopups, imgui.Vec2{}) {
-		ws.pendingDelete = key
+		ws.pendingDelete, ws.pendingShown = key, true
 	}
 	imgui.EndDisabled()
 	if blocked != "" {
