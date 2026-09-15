@@ -510,7 +510,8 @@ func (ws *WsShip) change(label string, action func() error) {
 		return
 	}
 	after := p.Capture()
-	restore := func(state ship.State) {
+	afterSelection := copySelection(ws.selected)
+	restore := func(state ship.State, selection map[string]string) {
 		ws.endShape()
 		ws.stage, ws.wizard, ws.task = stepBuild, false, taskPaint
 		p.Restore(state)
@@ -520,7 +521,7 @@ func (ws *WsShip) change(label string, action func() error) {
 		if n := len(p.Hull.Themes); ws.theme >= n {
 			ws.theme = max(0, n-1)
 		}
-		ws.selected = copySelection(sel)
+		ws.selected = copySelection(selection)
 		ws.source = 0
 		ws.catalog.Hulls[h] = p.Hull
 		if selected, ok := ws.app.SelectedPrefab(); ok && !p.AreaActive(selected.Path()) {
@@ -550,7 +551,7 @@ func (ws *WsShip) change(label string, action func() error) {
 		pane.CanvasState().SetMaxX(pane.Dmm().MaxX)
 		pane.CanvasState().SetMaxY(pane.Dmm().MaxY)
 	}
-	ws.app.CommandStorage().PushV(ws.CommandStackId(), command.Make(label, func() { restore(before) }, func() { restore(after) }))
+	ws.app.CommandStorage().PushV(ws.CommandStackId(), command.Make(label, func() { restore(before, sel) }, func() { restore(after, afterSelection) }))
 	ws.catalog.Hulls[h] = p.Hull
 	ws.rebuild()
 	tools.RefreshGrabSelection()

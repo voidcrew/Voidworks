@@ -31,6 +31,7 @@ const (
 	taskRenameTheme
 	taskRenameModule
 	taskReshape
+	taskRenameRoom
 )
 
 // usesShapeTool reports the tasks that collect room tiles on the hull canvas.
@@ -365,7 +366,7 @@ func (ws *WsShip) authorControls() {
 		ws.dockingControls()
 	case taskTheme, taskModule:
 		ws.copyControls()
-	case taskRenameTheme, taskRenameModule:
+	case taskRenameTheme, taskRenameModule, taskRenameRoom:
 		ws.renameControls()
 	case taskSettings:
 		ws.settingsControls()

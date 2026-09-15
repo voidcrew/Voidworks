@@ -25,6 +25,7 @@ type roomEditing struct {
 	themeOrder   []string              // that list as the source spells it
 	themeJobs    map[string]string     // theme ID -> crew copied for a new variant
 	themeFile    string                // where new variant registrations are written
+	moduleSlots  map[string]nameTarget // option ID -> original slot assignment
 	moduleThemes map[string]moduleThemeTarget
 	code         string
 }
@@ -307,6 +308,27 @@ func (p *Project) roomChanges(changes []FileChange) ([]FileChange, error) {
 		}
 		var err error
 		contents[target.file], err = rewriteTextField(contents[target.file], target.typePath, "desc", descriptionText(before), descriptionText(value))
+		if err != nil {
+			return nil, err
+		}
+	}
+	for id, target := range p.rooms.moduleSlots {
+		i := p.moduleIndex(id)
+		if i < 0 {
+			continue
+		}
+		before := ""
+		for _, m := range p.rooms.base.Modules {
+			if m.ID == id {
+				before = m.Slot
+			}
+		}
+		after := p.Hull.Modules[i].Slot
+		if before == after {
+			continue
+		}
+		var err error
+		contents[target.file], err = rewriteTextField(contents[target.file], target.typePath, "slot", before, after)
 		if err != nil {
 			return nil, err
 		}

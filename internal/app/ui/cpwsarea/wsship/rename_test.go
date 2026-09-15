@@ -1,6 +1,7 @@
 package wsship
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -188,5 +189,116 @@ func exerciseRenaming(t *testing.T, ws *WsShip, render func()) {
 	ws.app.CommandStorage().Undo()
 	if !ws.Save() {
 		t.Fatal(ws.message)
+	}
+}
+
+func exerciseRoomRenaming(t *testing.T, ws *WsShip, render func()) {
+	t.Helper()
+	ws.setStage(stepBuild)
+	ws.selectRoomOption("cargo", "cargo_basic")
+	originalSelection := ws.selected["cargo"]
+	ws.beginRename(taskRenameRoom, "cargo", "Cargo")
+	ws.itemName = ""
+	if ws.Save() || ws.task != taskRenameRoom {
+		t.Fatal("Save discarded an invalid room name")
+	}
+	ws.itemName = "Forward Cargo"
+	ws.message = ""
+	if !ws.IsModified() {
+		t.Fatal("room name draft has no unsaved indicator")
+	}
+	for i := 0; i < 3; i++ {
+		render()
+	}
+	if dst := os.Getenv("SHIP_RENDER_TEST_OUTPUT"); dst != "" {
+		captureFrame(t, filepath.Join(dst, "rename-room.png"), 1400, 960)
+	}
+	data, _, err := ws.captureRecovery()
+	var recovered recoveryWorkspace
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(data, &recovered); err != nil || recovered.Form.Task != taskRenameRoom || recovered.Form.ItemName != "Forward Cargo" {
+		t.Fatalf("recovery lost the room name form: %v", err)
+	}
+	if !ws.Save() {
+		t.Fatal(ws.message)
+	}
+	if ws.selected["Forward_Cargo"] != originalSelection || ws.task != taskPaint {
+		t.Fatal("renaming lost the selected option")
+	}
+	for i := 0; i < 3; i++ {
+		render()
+	}
+	if dst := os.Getenv("SHIP_RENDER_TEST_OUTPUT"); dst != "" {
+		captureFrame(t, filepath.Join(dst, "renamed-room.png"), 1400, 960)
+	}
+	fresh, err := dmenv.New(ws.project.Dme.RootFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/datum/ship_upgrade_module/workshop_fixture_cargo_basic"
+	if fresh.Objects[path].Vars.ValueV("slot", "") != `"Forward_Cargo"` {
+		t.Fatal("room rename did not reach the game registration")
+	}
+	ws.app.CommandStorage().Undo()
+	if !ws.Save() || ws.selected["cargo"] != originalSelection {
+		t.Fatalf("room rename undo failed: %s", ws.message)
+	}
+	ws.app.CommandStorage().Redo()
+	if !ws.Save() || ws.selected["Forward_Cargo"] != originalSelection {
+		t.Fatalf("room rename redo failed: %s", ws.message)
+	}
+	ws.app.CommandStorage().Undo()
+	if !ws.Save() {
+		t.Fatal(ws.message)
+	}
+	ws.beginRename(taskRenameRoom, "cargo", "Cargo")
+	ws.itemName = "Cancelled room"
+	ws.cancelRename()
+	if ws.IsModified() {
+		t.Fatal("Cancel kept the room-name draft")
+	}
+}
+
+func exerciseFleetRoomRename(t *testing.T, ws *WsShip) {
+	t.Helper()
+	slots := ws.project.Hull.SlotsFor(ws.currentTheme())
+	if len(slots) == 0 {
+		t.Fatal("fleet fixture has no rooms")
+	}
+	slot := slots[0]
+	if err := ws.project.PrepareSlotRename(slot, "Fleet Rename Check"); err != nil {
+		t.Fatal(err)
+	}
+	before := ws.project.Capture()
+	key, err := ws.project.RenameSlot(slot, "Fleet Rename Check")
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes, err := ws.project.Changes()
+	if err != nil || len(changes) == 0 {
+		t.Fatalf("fleet rename has no valid save: %v", err)
+	}
+	for _, theme := range ws.project.Hull.Themes {
+		if !ship.Contains(ws.project.Hull.SlotsFor(theme), key) {
+			continue
+		}
+		selected := map[string]string{}
+		for _, m := range ws.project.Hull.Modules {
+			if m.Slot == key && m.Available(theme.ID) {
+				selected[key] = m.ID
+				break
+			}
+		}
+		a, err := ws.project.Assemble(theme, selected)
+		if err != nil || len(a.Sources) != 2 {
+			t.Fatalf("renamed fleet variant failed to assemble: %v", err)
+		}
+	}
+	ws.project.Restore(before)
+	ws.rebuild()
+	if ws.project.Modified() {
+		t.Fatal("fleet rename inspection left unsaved changes")
 	}
 }

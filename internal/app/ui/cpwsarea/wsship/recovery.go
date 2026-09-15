@@ -279,7 +279,7 @@ func (ws *WsShip) restoreRecovery(entry recovery.Entry) error {
 	case taskCosts:
 		ws.beginCosts(f.CostScope)
 		ws.costs.values, ws.costs.dirty = f.CostValues, f.CostDirty
-	case taskSettings, taskRenameTheme, taskRenameModule:
+	case taskSettings, taskRenameTheme, taskRenameModule, taskRenameRoom:
 		ws.task = f.Task
 		ws.settings = settingsForm{f.SettingsName, f.SettingsDescription, f.SettingsCrew, f.SettingsHidden, f.SettingsCosts}
 		ws.itemID, ws.itemName, ws.itemDescription = f.ItemID, f.ItemName, f.ItemDescription

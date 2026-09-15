@@ -49,7 +49,9 @@ type recoveryProject struct {
 // CaptureRecovery preserves unfinished edits without validating or writing game files.
 // Call on the editor thread; the returned bytes can be written in the background.
 func (p *Project) CaptureRecovery() ([]byte, error) {
-	r := recoveryProject{Version: 1, Environment: p.Dme.RootFile, Documents: map[string]recoveryDocument{}}
+	// Version 2 preserves slot-assignment rewrites; older editors must not
+	// restore them without the corresponding source rewrite support.
+	r := recoveryProject{Version: 2, Environment: p.Dme.RootFile, Documents: map[string]recoveryDocument{}}
 	r.Hull = p.Hull
 	r.Settings = p.Settings
 	r.Files = p.files
@@ -107,7 +109,7 @@ func RecoverProject(c *Catalog, dme *dmenv.Dme, data []byte) (*Project, error) {
 	if err := json.Unmarshal(data, &r); err != nil {
 		return nil, err
 	}
-	if r.Version != 1 || !sameRecoveryPath(r.Environment, dme.RootFile) {
+	if (r.Version != 1 && r.Version != 2) || !sameRecoveryPath(r.Environment, dme.RootFile) {
 		return nil, fmt.Errorf("recovery belongs to a different project or version")
 	}
 	if !strings.HasPrefix(r.Hull.Type, HullType+"/") {
@@ -147,7 +149,7 @@ func RecoverProject(c *Catalog, dme *dmenv.Dme, data []byte) (*Project, error) {
 		for path, f := range v.sources {
 			paths = append(paths, path, f.Path)
 		}
-		for _, m := range []map[string]nameTarget{v.names, v.descriptions, v.mapFields, v.removals, v.defaults, v.themeTargets} {
+		for _, m := range []map[string]nameTarget{v.names, v.descriptions, v.mapFields, v.removals, v.defaults, v.themeTargets, v.moduleSlots} {
 			for _, n := range m {
 				paths = append(paths, n.file)
 			}
@@ -315,12 +317,13 @@ type recoveryRoomEditing struct {
 	ThemeOrder   []string
 	ThemeJobs    map[string]string
 	ThemeFile    string
+	ModuleSlots  map[string]nameTarget
 	ModuleThemes map[string]moduleThemeTarget
 	Code         string
 }
 
 func (v roomEditing) MarshalJSON() ([]byte, error) {
-	return json.Marshal(recoveryRoomEditing{Base: v.base, Sources: v.sources, Targets: v.targets, Names: v.names, Descriptions: v.descriptions, MapFields: v.mapFields, Removals: v.removals, Defaults: v.defaults, ThemeTargets: v.themeTargets, ThemeList: v.themeList, ThemeOrder: v.themeOrder, ThemeJobs: v.themeJobs, ThemeFile: v.themeFile, ModuleThemes: v.moduleThemes, Code: v.code})
+	return json.Marshal(recoveryRoomEditing{Base: v.base, Sources: v.sources, Targets: v.targets, Names: v.names, Descriptions: v.descriptions, MapFields: v.mapFields, Removals: v.removals, Defaults: v.defaults, ThemeTargets: v.themeTargets, ThemeList: v.themeList, ThemeOrder: v.themeOrder, ThemeJobs: v.themeJobs, ThemeFile: v.themeFile, ModuleSlots: v.moduleSlots, ModuleThemes: v.moduleThemes, Code: v.code})
 }
 func (v *roomEditing) UnmarshalJSON(data []byte) error {
 	var r recoveryRoomEditing
@@ -340,6 +343,7 @@ func (v *roomEditing) UnmarshalJSON(data []byte) error {
 	v.themeOrder = r.ThemeOrder
 	v.themeJobs = r.ThemeJobs
 	v.themeFile = r.ThemeFile
+	v.moduleSlots = r.ModuleSlots
 	v.moduleThemes = r.ModuleThemes
 	v.code = r.Code
 	return nil

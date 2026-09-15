@@ -170,3 +170,32 @@ func TestRecoveryRejectsDifferentEnvironmentAndEscapingPaths(t *testing.T) {
 		t.Fatal("accepted a path outside the project")
 	}
 }
+
+func TestRecoveryReadsPreviousVersionAndRejectsUnknownVersion(t *testing.T) {
+	c, d := authorEnvironment(t)
+	p, err := NewProject(c, d, "compatible", "Compatible", 10, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := p.CaptureRecovery()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var snapshot recoveryProject
+	if err = json.Unmarshal(data, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Version != 2 {
+		t.Fatal("new recovery is not protected from older readers")
+	}
+	snapshot.Version = 1
+	legacy, _ := json.Marshal(snapshot)
+	if _, err = RecoverProject(c, d, legacy); err != nil {
+		t.Fatalf("cannot restore an earlier beta's draft: %v", err)
+	}
+	snapshot.Version = 999
+	unknown, _ := json.Marshal(snapshot)
+	if _, err = RecoverProject(c, d, unknown); err == nil {
+		t.Fatal("accepted an unsupported recovery format")
+	}
+}

@@ -196,7 +196,7 @@ func (ws *WsShip) optionRows(slot string, options []ship.Module) {
 	if imgui.SmallButton("Room...") {
 		imgui.OpenPopup("room-menu-" + slot)
 	}
-	tooltip("Change this room's shape, show the bare hull, or delete the room.")
+	tooltip("Rename this room, change its shape, show the bare hull, or delete it.")
 	imgui.UnindentV(14 * s)
 }
 
@@ -214,6 +214,9 @@ func (ws *WsShip) beginAddOption(slot string) {
 
 func (ws *WsShip) roomMenu(slot string, options int) {
 	name := ship.SlotDisplayName(slot)
+	if imgui.Selectable("Rename room...") {
+		ws.beginRename(taskRenameRoom, slot, name)
+	}
 	if imgui.Selectable("Change shape...") {
 		ws.reshapeSlot = slot
 		ws.beginTask(taskReshape)

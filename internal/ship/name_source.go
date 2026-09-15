@@ -12,7 +12,7 @@ func rewriteName(data []byte, typePath, expected, name string) ([]byte, error) {
 	return rewriteTextField(data, typePath, "name", expected, name)
 }
 
-// The field must be a known plain text variable (name or desc).
+// The field must be a known plain text variable (such as name, desc or slot).
 func rewriteTextField(data []byte, typePath, field, expected, value string) ([]byte, error) {
 	mask := dmSourceMask(data, true)
 	start, end, matches := -1, len(data), 0

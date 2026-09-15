@@ -3,6 +3,7 @@ package ship
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"sdmm/internal/dmapi/dmenv"
 	"sdmm/internal/util"
@@ -213,7 +214,8 @@ func SlotDisplayName(id string) string {
 	if s == "" {
 		return s
 	}
-	return strings.ToUpper(s[:1]) + s[1:]
+	_, size := utf8.DecodeRuneInString(s)
+	return strings.ToUpper(s[:size]) + s[size:]
 }
 
 // SupportsFootprints reports whether the loaded game declares the marker's
