@@ -346,6 +346,7 @@ func exerciseAuthoring(t *testing.T, ws *WsShip, dme *dmenv.Dme, render func()) 
 	exerciseCosts(t, ws, render, true)
 	exerciseRenaming(t, ws, render)
 	exercisePreviewSaveHook(t, ws, render)
+	exerciseRecovery(t, ws, render)
 	exerciseRemoval(t, ws, render)
 }
 

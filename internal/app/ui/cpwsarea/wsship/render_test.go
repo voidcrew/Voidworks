@@ -193,6 +193,7 @@ func TestRenderShipWorkspace(t *testing.T) {
 			t.Fatalf("preview changed source %s", path)
 		}
 	}
+	exerciseJeanShorts(t, ws, render)
 	exerciseResponsiveCrew(t, ws, render, func(w, h int) { viewWidth, viewHeight = w, h })
 	exerciseResponsiveCosts(t, ws, render, func(w, h int) { viewWidth, viewHeight = w, h })
 	viewWidth, viewHeight = width, height

@@ -12,6 +12,7 @@ import (
 	"sdmm/internal/ship"
 	"sdmm/internal/util"
 	"strings"
+	"time"
 )
 
 type App interface {
@@ -19,6 +20,7 @@ type App interface {
 	OnWorkspaceSwitched()
 }
 type WsShip struct {
+	recovery recoveryState
 	workspace.Content
 	isolated, invalid                bool
 	app                              App
@@ -83,6 +85,9 @@ func New(app App, busy ...func(string) bool) *WsShip {
 		app.PathsFilter().TogglePath("/area")
 	}
 	tools.SetEnabled(false)
+	if app, ok := app.(interface{ ShipRecoveryDirectory() string }); ok {
+		ws.startRecovery(app.ShipRecoveryDirectory())
+	}
 	return ws
 }
 func (ws *WsShip) Name() string {
@@ -95,7 +100,7 @@ func (ws *WsShip) Name() string {
 			}
 		}
 	}
-	if dirty {
+	if dirty || ws.recovery.restored {
 		prefix = "* "
 	}
 	return prefix + "Ship Workshop###" + ws.Id()
@@ -107,7 +112,7 @@ func (ws *WsShip) Title() string {
 	return "Ship Workshop"
 }
 func (ws *WsShip) Map() *pmap.PaneMap {
-	if ws.wizard || ws.invalid || ws.stage != stepBuild || ws.task == taskCrew || ws.task == taskCosts {
+	if len(ws.recovery.pending) > 0 || ws.wizard || ws.invalid || ws.stage != stepBuild || ws.task == taskCrew || ws.task == taskCosts {
 		return nil
 	}
 	return ws.pane
@@ -131,6 +136,7 @@ func (ws *WsShip) IsModified() bool {
 	return false
 }
 func (ws *WsShip) PreProcess() {
+	ws.autosave(time.Now())
 	for _, p := range ws.panes {
 		p.SetShortcutsVisible(false)
 	}
@@ -154,6 +160,7 @@ func (ws *WsShip) OnFocusChange(f bool) {
 	}
 }
 func (ws *WsShip) Dispose() {
+	ws.disposeRecovery()
 	ws.endShape()
 	if ws.pane != nil {
 		ws.pane.OnDeactivate()
@@ -468,6 +475,7 @@ func (ws *WsShip) Save() bool {
 		return false
 	}
 	ws.app.CommandStorage().ForceBalance(ws.CommandStackId())
+	ws.clearRecovery()
 	ws.message = "Saved. Your ship files are up to date."
 	ws.notifySaved()
 	return true

@@ -122,6 +122,9 @@ func (ws *WsShip) setStage(stage int) {
 func (ws *WsShip) Process() {
 	workshop.PushStyle()
 	defer workshop.PopStyle()
+	if ws.recoveryPrompt() {
+		return
+	}
 	scale := window.PointSize()
 	context := "Fleet library"
 	if ws.project != nil && ws.stage != stepChoose {
@@ -213,6 +216,7 @@ func (ws *WsShip) controls() {
 		imgui.TextWrapped(ws.message)
 	}
 	ws.removalRecovery()
+	ws.recoveryStatus()
 	if app, ok := ws.app.(interface{ ShipPreviewStatus() shippreview.Status }); ok {
 		workshop.PreviewStatus(app.ShipPreviewStatus(), ws.notifySaved)
 	}

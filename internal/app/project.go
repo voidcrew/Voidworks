@@ -129,6 +129,7 @@ func (a *app) forceLoadEnvironment(path string, callback func()) {
 		runtime.GC()
 
 		log.Print("environment opened:", path)
+		a.offerShipRecovery()
 
 		if callback != nil {
 			callback()

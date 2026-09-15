@@ -111,6 +111,7 @@ func (ws *WsShip) finishRemoval(plan *ship.RemovalPlan, backup string) {
 	ws.message = "Removed " + plan.Name + "."
 	ws.notifySaved()
 	ws.removalBackup = backup
+	ws.clearRecovery()
 	tools.SetEnabled(false)
 	ws.app.OnWorkspaceSwitched()
 }

@@ -2,6 +2,7 @@ package dmmdata
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"sort"
 
@@ -66,3 +67,13 @@ func New(path string) (*DmmData, error) {
 	defer file.Close()
 	return parse(file)
 }
+
+// Read parses a map snapshot without writing it to a temporary game file.
+func Read(path string, r io.Reader) (*DmmData, error) { return parse(mapReader{r, path}) }
+
+type mapReader struct {
+	io.Reader
+	path string
+}
+
+func (r mapReader) Name() string { return r.path }

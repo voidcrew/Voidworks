@@ -175,7 +175,10 @@ func buildCrewVisual(p *ship.Project, j ship.CrewJob, dir int) crewVisual {
 			file = "icons/mob/clothing/" + slot.file
 		}
 		if state == "" {
-			state = o.Vars.TextV("icon_state", "")
+			state = o.Vars.TextV("post_init_icon_state", "")
+			if state == "" {
+				state = o.Vars.TextV("icon_state", "")
+			}
 		}
 		first := len(v.layers)
 		tint := crewColor(o.Vars.TextV("color", ""))
