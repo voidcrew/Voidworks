@@ -249,14 +249,21 @@ func (ws *WsShip) variantRooms(info ship.ThemeInfo) {
 	}
 	for _, slot := range ws.shipSlots(info.Slots) {
 		enabled := ship.Contains(info.Slots, slot)
+		section := roomSection{hull: ws.project.Hull.Type, theme: info.ID, slot: slot, variants: true}
 		imgui.PushID("variant-room-" + slot)
 		imgui.PushID(ws.project.Hull.Type)
 		imgui.PushID(info.ID)
-		flags := imgui.TreeNodeFlagsDefaultOpen | imgui.TreeNodeFlagsNoTreePushOnOpen | imgui.TreeNodeFlagsFramePadding
+		flags := imgui.TreeNodeFlagsNoTreePushOnOpen | imgui.TreeNodeFlagsFramePadding
 		if !enabled {
 			flags |= imgui.TreeNodeFlagsLeaf
 		}
+		imgui.SetNextItemOpen(!ws.collapsedSections[section], imgui.ConditionAlways)
 		expanded := imgui.TreeNodeV("##options", flags)
+		// A disabled leaf or a skipped window can return a different open value
+		// without a click. Only an actual disclosure toggle changes the preference.
+		if enabled && imgui.IsItemToggledOpen() {
+			ws.setRoomCollapsed(section, !expanded)
+		}
 		if enabled {
 			tooltip("Expand or collapse this room's options.")
 		}

@@ -61,6 +61,7 @@ type WsShip struct {
 	pendingDelete                    string // "slot/x" or "module/x" awaiting its second click
 	pendingShown                     bool
 	fixedConfirmed                   map[string]bool // hull types whose modular conversion was confirmed
+	collapsedSections                map[roomSection]bool
 	optionInfos                      map[string]optionInfo
 	variantInfos                     map[string]variantInfo
 	sharedRooms                      map[string]bool

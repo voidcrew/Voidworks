@@ -22,6 +22,35 @@ type optionInfo struct {
 	crew  int
 }
 
+// Keep disclosure separate from edit selection and ImGui's window storage.
+// Rebuilding maps or changing tasks must not reset the workshop's view state.
+type roomSection struct {
+	hull, theme, slot string
+	variants          bool
+}
+
+func (ws *WsShip) setRoomCollapsed(section roomSection, collapsed bool) {
+	if ws.collapsedSections == nil {
+		ws.collapsedSections = map[roomSection]bool{}
+	}
+	ws.collapsedSections[section] = collapsed
+}
+
+func (ws *WsShip) roomExpanded(slot string) bool {
+	section := roomSection{hull: ws.project.Hull.Type, theme: ws.currentTheme().ID, slot: slot}
+	return ws.editingSlot() == slot && !ws.collapsedSections[section]
+}
+
+func (ws *WsShip) clickRoomHeading(slot string) {
+	section := roomSection{hull: ws.project.Hull.Type, theme: ws.currentTheme().ID, slot: slot}
+	if ws.editingSlot() == slot {
+		ws.setRoomCollapsed(section, !ws.collapsedSections[section])
+	} else {
+		ws.editRoom(slot)
+		ws.setRoomCollapsed(section, false)
+	}
+}
+
 func (ws *WsShip) option(id string) optionInfo {
 	if info, ok := ws.optionInfos[id]; ok {
 		return info
@@ -113,14 +142,15 @@ func (ws *WsShip) roomsControls() {
 			badge = "hull only"
 		}
 		selected := slot == editing
-		if workshop.Row("room-"+slot, ship.SlotDisplayName(slot), detail, badge, selected, style.Amber, 0) && !selected {
-			ws.editRoom(slot)
+		if workshop.Row("room-"+slot, ship.SlotDisplayName(slot), detail, badge, selected, style.Amber, 14) {
+			ws.clickRoomHeading(slot)
 		}
+		roomDisclosureArrow(ws.roomExpanded(slot))
 		if imgui.BeginPopupContextItemV("room-menu-"+slot, 1) {
 			ws.roomMenu(slot, len(options))
 			imgui.EndPopup()
 		}
-		if selected {
+		if ws.roomExpanded(slot) {
 			ws.optionRows(slot, options)
 		}
 	}
@@ -133,6 +163,17 @@ func (ws *WsShip) roomsControls() {
 	}
 	tooltip("Select the room's tiles on the hull, then turn them into a swappable upgrade room.")
 	ws.checksSummary()
+}
+
+// The whole room heading remains one mouse/keyboard target, including its arrow.
+func roomDisclosureArrow(expanded bool) {
+	s := window.PointSize()
+	center := imgui.ItemRectMin().Plus(imgui.Vec2{X: 17 * s, Y: 9*s + imgui.TextLineHeight()/2})
+	a, b, c := imgui.Vec2{X: -3, Y: -4}, imgui.Vec2{X: -3, Y: 4}, imgui.Vec2{X: 3}
+	if expanded {
+		a, b, c = imgui.Vec2{X: -4, Y: -3}, imgui.Vec2{X: 4, Y: -3}, imgui.Vec2{Y: 3}
+	}
+	imgui.WindowDrawList().AddTriangleFilled(center.Plus(a.Times(s)), center.Plus(b.Times(s)), center.Plus(c.Times(s)), imgui.PackedColorFromVec4(style.Muted))
 }
 
 func (ws *WsShip) roomShape(slot string) (ship.RoomShape, bool) {

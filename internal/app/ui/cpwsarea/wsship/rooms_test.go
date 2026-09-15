@@ -1,14 +1,85 @@
 package wsship
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sdmm/internal/app/ui/cpwsarea/wsmap/tools"
 	"sdmm/internal/ship"
 	"sdmm/internal/util"
 	"strings"
 	"testing"
+
+	"github.com/SpaiR/imgui-go"
 )
+
+func TestRoomHeadingTogglesOptionsWithoutChangingSelection(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	ctx := imgui.CreateContext(nil)
+	defer ctx.Destroy()
+	io := imgui.CurrentIO()
+	io.SetIniFilename("")
+	io.SetDisplaySize(imgui.Vec2{X: 400, Y: 600})
+	io.SetDeltaTime(1.0 / 60)
+	io.Fonts().TextureDataRGBA32()
+	ws := &WsShip{
+		project: &ship.Project{Hull: ship.Hull{Type: "/datum/map_template/shuttle/test", Slots: []string{"engineering"},
+			Modules: []ship.Module{{ID: "engine", Slot: "engineering", Name: "Engine"}}}},
+		assembly: &ship.Assembly{Sources: []ship.Source{{Name: "Hull"}, {Slot: "engineering"}}},
+		source:   1, selected: map[string]string{"engineering": "engine"},
+		optionInfos: map[string]optionInfo{"engine": {price: "Free"}},
+	}
+	before, err := json.Marshal(ws.project.Hull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row imgui.Vec2
+	frame := func() float32 {
+		imgui.NewFrame()
+		imgui.SetNextWindowPos(imgui.Vec2{})
+		imgui.SetNextWindowSize(imgui.Vec2{X: 400, Y: 600})
+		imgui.BeginV("Room headings", nil, imgui.WindowFlagsNoSavedSettings)
+		pos := imgui.CursorScreenPos()
+		// The first upgrade heading follows the section label and Hull row.
+		row = pos.Plus(imgui.Vec2{X: 100, Y: 110})
+		ws.roomsControls()
+		height := imgui.CursorScreenPos().Y - pos.Y
+		imgui.End()
+		imgui.Render()
+		return height
+	}
+	click := func() float32 {
+		io.SetMousePosition(row)
+		frame()
+		io.SetMouseButtonDown(0, true)
+		frame()
+		io.SetMouseButtonDown(0, false)
+		frame()
+		io.SetMousePosition(imgui.Vec2{X: -1000, Y: -1000})
+		return frame()
+	}
+	frame()
+	expanded := frame()
+	collapsed := click()
+	if collapsed >= expanded || ws.roomExpanded("engineering") {
+		t.Fatal("clicking the active heading did not hide its options")
+	}
+	ws.source = 0
+	frame()
+	ws.source = 1
+	if frame() != collapsed {
+		t.Fatal("changing the edit target reset the disclosure")
+	}
+	if click() != expanded {
+		t.Fatal("clicking the heading again did not reopen its options")
+	}
+	after, err := json.Marshal(ws.project.Hull)
+	if err != nil || string(before) != string(after) || ws.source != 1 || ws.selected["engineering"] != "engine" {
+		t.Fatal("toggling options changed the ship or edit target")
+	}
+}
 
 // The canvas outline is derived from a room's hull tiles: an L-shaped room
 // draws its inner corner, and the marker tile is not part of the outline.
@@ -84,6 +155,22 @@ func exerciseRoomsPanel(t *testing.T, ws *WsShip, render func()) {
 		t.Fatalf("editing label: %q", got)
 	}
 	capture("rooms-panel-expanded")
+	ws.clickRoomHeading("cargo")
+	if ws.roomExpanded("cargo") || ws.editingSlot() != "cargo" {
+		t.Fatal("collapsing the edited room changed the editing target")
+	}
+	ws.rebuild()
+	ws.beginTask(taskSettings)
+	render()
+	ws.finishTask()
+	capture("rooms-panel-collapsed")
+	if ws.roomExpanded("cargo") {
+		t.Fatal("rebuild or returning from ship details reopened a collapsed room")
+	}
+	ws.clickRoomHeading("cargo")
+	if !ws.roomExpanded("cargo") {
+		t.Fatal("clicking the collapsed heading did not expand it")
+	}
 	if room, ok := ws.assembly.Rooms["cargo"]; !ok || !room.Footprint.IsFull() {
 		t.Fatal("cargo room has no footprint on the assembly")
 	}

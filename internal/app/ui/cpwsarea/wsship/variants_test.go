@@ -238,18 +238,40 @@ func exerciseVariantsPanel(t *testing.T, ws *WsShip, render func()) {
 		t.Fatalf("room without a shared base: %q", got)
 	}
 	capture("variants-expanded")
+	section := roomSection{hull: project.Hull.Type, theme: added.ID, slot: "cargo", variants: true}
+	ws.setRoomCollapsed(section, true)
+	checkCollapsed := func() {
+		t.Helper()
+		render()
+		if !ws.collapsedSections[section] {
+			t.Fatal("a workshop transition reset the collapsed variant room")
+		}
+	}
+	ws.rebuild()
+	checkCollapsed()
 	// The edited room follows a variant switch when both variants have it.
 	ws.editRoom("cargo")
+	checkCollapsed()
+	ws.selectRoomOption("cargo", "medical")
+	checkCollapsed()
+	ws.selectRoomOption("cargo", "cargo_basic")
+	ws.beginTask(taskSettings)
+	render()
+	ws.finishTask()
+	checkCollapsed()
 	ws.switchTheme(0)
+	checkCollapsed()
 	if ws.theme != 0 || ws.editingSlot() != "cargo" {
 		t.Fatalf("switching variants dropped the edited room: %d %q", ws.theme, ws.editingSlot())
 	}
 	ws.switchTheme(len(before))
+	checkCollapsed()
 	if ws.theme != len(before) || ws.editingSlot() != "cargo" {
 		t.Fatal("switching back dropped the edited room")
 	}
 	// Fork the shared room, then put it back.
 	ws.forkOption("cargo_basic", added.ID)
+	checkCollapsed()
 	if ws.message != "" || ws.invalid {
 		t.Fatalf("fork: %s", ws.message)
 	}
@@ -272,6 +294,7 @@ func exerciseVariantsPanel(t *testing.T, ws *WsShip, render func()) {
 	}
 	// Leave the room out of this variant, then put it back.
 	ws.setVariantRoom(added.ID, "cargo", false)
+	checkCollapsed()
 	if ws.message != "" || ws.invalid {
 		t.Fatalf("disable room: %s", ws.message)
 	}
@@ -280,6 +303,7 @@ func exerciseVariantsPanel(t *testing.T, ws *WsShip, render func()) {
 	}
 	capture("variants-room-off")
 	ws.setVariantRoom(added.ID, "cargo", true)
+	checkCollapsed()
 	if ws.message != "" || !ship.Contains(project.Hull.SlotsFor(ws.currentTheme()), "cargo") {
 		t.Fatalf("enable room: %s", ws.message)
 	}
@@ -356,15 +380,18 @@ func TestVariantRoomCollapsePreservesConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	var arrow imgui.Vec2
+	host := "Variant room disclosure"
 	frame := func() float32 {
 		imgui.NewFrame()
 		imgui.SetNextWindowPos(imgui.Vec2{})
 		imgui.SetNextWindowSize(imgui.Vec2{X: 400, Y: 400})
-		imgui.BeginV("Variant room disclosure", nil, imgui.WindowFlagsNoSavedSettings)
+		imgui.BeginV(host, nil, imgui.WindowFlagsNoSavedSettings)
+		imgui.BeginChild("ship-controls")
 		pos := imgui.CursorScreenPos()
 		arrow = pos.Plus(imgui.Vec2{X: 22, Y: imgui.FrameHeight() / 2})
 		ws.variantRooms(info)
 		height := imgui.CursorScreenPos().Y - pos.Y
+		imgui.EndChild()
 		imgui.End()
 		imgui.Render()
 		return height
@@ -398,6 +425,13 @@ func TestVariantRoomCollapsePreservesConfiguration(t *testing.T) {
 	ws.project.Hull.Type = originalType
 	if frame() != collapsed {
 		t.Fatal("switching away and back lost the collapsed state")
+	}
+	// The disclosure belongs to the workshop even if its containing window
+	// changes. ImGui's tree storage alone is scoped to the old child window.
+	host = "Reopened variant room disclosure"
+	frame()
+	if frame() != collapsed {
+		t.Fatal("recreating the sidebar lost the collapsed state")
 	}
 	info.Slots = nil
 	frame()
