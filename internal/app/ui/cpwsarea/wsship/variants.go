@@ -239,8 +239,8 @@ func (ws *WsShip) variantsControls() {
 	tooltip("Variants are alternate hulls of this ship with their own rooms, crew and price.")
 }
 
-// variantRooms expands the open variant: its rooms, and under each the options
-// players can choose from.
+// variantRooms lists the open variant's rooms with independently collapsible
+// option lists. Disclosure state belongs to the UI, not the ship configuration.
 func (ws *WsShip) variantRooms(info ship.ThemeInfo) {
 	s := window.PointSize()
 	imgui.IndentV(14 * s)
@@ -250,6 +250,17 @@ func (ws *WsShip) variantRooms(info ship.ThemeInfo) {
 	for _, slot := range ws.shipSlots(info.Slots) {
 		enabled := ship.Contains(info.Slots, slot)
 		imgui.PushID("variant-room-" + slot)
+		imgui.PushID(ws.project.Hull.Type)
+		imgui.PushID(info.ID)
+		flags := imgui.TreeNodeFlagsDefaultOpen | imgui.TreeNodeFlagsNoTreePushOnOpen | imgui.TreeNodeFlagsFramePadding
+		if !enabled {
+			flags |= imgui.TreeNodeFlagsLeaf
+		}
+		expanded := imgui.TreeNodeV("##options", flags)
+		if enabled {
+			tooltip("Expand or collapse this room's options.")
+		}
+		imgui.SameLine()
 		on := enabled
 		if imgui.Checkbox(ship.SlotDisplayName(slot), &on) {
 			ws.setVariantRoom(info.ID, slot, on)
@@ -259,9 +270,11 @@ func (ws *WsShip) variantRooms(info ship.ThemeInfo) {
 		} else {
 			tooltip("Load this room in this variant.")
 		}
-		if enabled {
+		if enabled && expanded {
 			ws.variantOptions(info, slot)
 		}
+		imgui.PopID()
+		imgui.PopID()
 		imgui.PopID()
 	}
 	if imgui.SmallButton("Variant...") {
@@ -273,7 +286,7 @@ func (ws *WsShip) variantRooms(info ship.ThemeInfo) {
 
 func (ws *WsShip) variantOptions(info ship.ThemeInfo, slot string) {
 	s := window.PointSize()
-	imgui.IndentV(14 * s)
+	imgui.IndentV(42 * s)
 	menuWidth := smallButtonWidth("...")
 	for _, o := range info.Options {
 		if o.Slot != slot {
@@ -307,7 +320,7 @@ func (ws *WsShip) variantOptions(info ship.ThemeInfo, slot string) {
 		imgui.UnindentV(22 * s)
 		imgui.PopID()
 	}
-	imgui.UnindentV(14 * s)
+	imgui.UnindentV(42 * s)
 }
 
 func (ws *WsShip) variantOptionMenu(themeID string, m ship.Module, o ship.OptionStatus, shared bool) {

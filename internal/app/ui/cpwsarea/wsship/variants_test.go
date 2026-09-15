@@ -1,11 +1,14 @@
 package wsship
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/SpaiR/imgui-go"
 	"sdmm/internal/ship"
 )
 
@@ -325,5 +328,88 @@ func exerciseVariantsPanel(t *testing.T, ws *WsShip, render func()) {
 	ws.editRoom("cargo")
 	if ws.invalid || ws.editingSlot() != "cargo" {
 		t.Fatalf("fixture is not editable after the walkthrough: %s", ws.message)
+	}
+}
+
+// Disclosure clicks must hide the option controls without changing what the
+// variant loads. Each ship and variant remembers its own open room sections.
+func TestVariantRoomCollapsePreservesConfiguration(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	ctx := imgui.CreateContext(nil)
+	defer ctx.Destroy()
+	io := imgui.CurrentIO()
+	io.SetIniFilename("")
+	io.SetDisplaySize(imgui.Vec2{X: 400, Y: 400})
+	io.SetDeltaTime(1.0 / 60)
+	io.Fonts().TextureDataRGBA32()
+	ws := &WsShip{
+		project: &ship.Project{Hull: ship.Hull{Type: "/datum/map_template/shuttle/test", Slots: []string{"cargo"},
+			Modules: []ship.Module{{ID: "cargo_basic", Slot: "cargo", Name: "Cargo", File: "cargo.dmm"}}}},
+		selected:    map[string]string{"cargo": "cargo_basic"},
+		sharedRooms: map[string]bool{"cargo.dmm": true},
+	}
+	info := ship.ThemeInfo{ID: "standard", Slots: []string{"cargo"},
+		Options: []ship.OptionStatus{{ModuleID: "cargo_basic", Slot: "cargo", Available: true}}}
+	before, err := json.Marshal(ws.project.Hull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var arrow imgui.Vec2
+	frame := func() float32 {
+		imgui.NewFrame()
+		imgui.SetNextWindowPos(imgui.Vec2{})
+		imgui.SetNextWindowSize(imgui.Vec2{X: 400, Y: 400})
+		imgui.BeginV("Variant room disclosure", nil, imgui.WindowFlagsNoSavedSettings)
+		pos := imgui.CursorScreenPos()
+		arrow = pos.Plus(imgui.Vec2{X: 22, Y: imgui.FrameHeight() / 2})
+		ws.variantRooms(info)
+		height := imgui.CursorScreenPos().Y - pos.Y
+		imgui.End()
+		imgui.Render()
+		return height
+	}
+	click := func() float32 {
+		io.SetMousePosition(arrow)
+		frame()
+		io.SetMouseButtonDown(0, true)
+		frame()
+		io.SetMouseButtonDown(0, false)
+		frame()
+		io.SetMousePosition(imgui.Vec2{X: -1000, Y: -1000})
+		return frame()
+	}
+	frame()
+	expanded := frame()
+	collapsed := click()
+	if collapsed >= expanded {
+		t.Fatalf("collapse did not hide the option rows: %g >= %g", collapsed, expanded)
+	}
+	info.ID = "salvage"
+	if frame() != expanded {
+		t.Fatal("collapsing one variant also collapsed another")
+	}
+	info.ID = "standard"
+	originalType := ws.project.Hull.Type
+	ws.project.Hull.Type += "_other"
+	if frame() != expanded {
+		t.Fatal("collapsing one ship also collapsed another")
+	}
+	ws.project.Hull.Type = originalType
+	if frame() != collapsed {
+		t.Fatal("switching away and back lost the collapsed state")
+	}
+	info.Slots = nil
+	frame()
+	info.Slots = []string{"cargo"}
+	if frame() != collapsed {
+		t.Fatal("disabling and enabling a room lost the collapsed state")
+	}
+	if click() != expanded {
+		t.Fatal("expanding the room did not restore its option rows")
+	}
+	after, err := json.Marshal(ws.project.Hull)
+	if err != nil || string(before) != string(after) || ws.selected["cargo"] != "cargo_basic" {
+		t.Fatalf("disclosure changed the ship configuration: %s (%v)", after, err)
 	}
 }
