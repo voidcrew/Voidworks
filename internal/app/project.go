@@ -198,7 +198,10 @@ func makeLoadingDialog(path string) dialog.Type {
 // Configure paths filter to access a newly opened environment.
 func newPathsFilter(env *dmenv.Dme) *dm.PathsFilter {
 	return dm.NewPathsFilter(func(path string) []string {
-		return env.Objects[path].DirectChildren
+		if object := env.Objects[path]; object != nil {
+			return object.DirectChildren
+		}
+		return nil
 	})
 }
 

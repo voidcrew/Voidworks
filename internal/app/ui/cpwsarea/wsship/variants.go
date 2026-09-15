@@ -105,10 +105,21 @@ func optionStatusText(o ship.OptionStatus, shared bool) string {
 	return "Shared"
 }
 
-// sharedRoom reports whether an option has a base room the variants can share.
+// sharedRoom caches the display status until the workshop rebuilds. Resolving
+// a room source checks every path component on disk, including for missing
+// shared rooms, so it must not run again for each sidebar row on every frame.
+// Model operations still resolve and validate the source when an action runs.
 func (ws *WsShip) sharedRoom(m ship.Module) bool {
+	if shared, ok := ws.sharedRooms[m.File]; ok {
+		return shared
+	}
 	_, err := ws.project.ModuleSource(m, "")
-	return err == nil
+	shared := err == nil
+	if ws.sharedRooms == nil {
+		ws.sharedRooms = map[string]bool{}
+	}
+	ws.sharedRooms[m.File] = shared
+	return shared
 }
 
 // keptRoom picks what stays on screen across a variant switch: the edited room

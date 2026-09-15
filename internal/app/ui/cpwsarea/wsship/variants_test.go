@@ -9,6 +9,37 @@ import (
 	"sdmm/internal/ship"
 )
 
+// Repainting the sidebar must not repeat path resolution, for either an
+// existing shared room or a room that only has variant-specific copies.
+func TestSharedRoomStatusHasNoPerFrameAllocations(t *testing.T) {
+	for _, exists := range []bool{false, true} {
+		name := "missing"
+		if exists {
+			name = "shared"
+		}
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			m := ship.Module{ID: "cargo", File: "cargo.dmm"}
+			if exists {
+				if err := os.WriteFile(filepath.Join(root, m.File), nil, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			ws := &WsShip{project: &ship.Project{Catalog: &ship.Catalog{Root: root}}}
+			if ws.sharedRoom(m) != exists {
+				t.Fatal("incorrect initial shared-room status")
+			}
+			if allocations := testing.AllocsPerRun(100, func() {
+				if ws.sharedRoom(m) != exists {
+					t.Fatal("shared-room status changed between frames")
+				}
+			}); allocations != 0 {
+				t.Fatalf("repainting a room status allocated %g times", allocations)
+			}
+		})
+	}
+}
+
 func TestThemeDetail(t *testing.T) {
 	for _, c := range []struct {
 		name string
@@ -123,12 +154,18 @@ func exerciseVariantsPanel(t *testing.T, ws *WsShip, render func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if ws.sharedRoom(basic) {
+		t.Fatal("fixture unexpectedly already has a shared room")
+	}
 	if err = os.WriteFile(shared, data, 0600); err != nil {
 		t.Fatal(err)
 	}
 	ws.editRoom("cargo")
 	if ws.editingSlot() != "cargo" {
 		t.Fatal("fixture cannot edit its room")
+	}
+	if !ws.sharedRoom(basic) {
+		t.Fatal("rebuilding after a room change kept stale shared-room status")
 	}
 	capture("variants-panel")
 	// Add a variant that shares the ship's rooms.

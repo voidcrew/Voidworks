@@ -222,7 +222,7 @@ func (e *Environment) showVisibilityCheckbox(node *treeNode) {
 
 	imgui.PushStyleVarVec2(imgui.StyleVarFramePadding, e.calcTreeNodePadding(node.name))
 	if imgui.Checkbox(fmt.Sprint("##node_visibility_", node.orig.Path), &value) {
-		e.app.PathsFilter().TogglePath(node.orig.Path)
+		e.app.PathsFilter().SetVisible(node.orig.Path, value)
 	}
 
 	imgui.PopStyleVar()

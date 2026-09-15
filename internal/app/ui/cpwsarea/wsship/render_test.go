@@ -157,6 +157,7 @@ func TestRenderShipWorkspace(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
+		exerciseVisibilityExceptions(t, ws, render)
 		// Exercise a theme switch, module switch and return to the bare hull.
 		if len(ws.catalog.Hulls[ws.hull].Themes) > 1 {
 			ws.theme = 1

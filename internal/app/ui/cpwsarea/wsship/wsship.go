@@ -11,7 +11,6 @@ import (
 	"sdmm/internal/dmapi/dmmap/dmminstance"
 	"sdmm/internal/ship"
 	"sdmm/internal/util"
-	"strings"
 	"time"
 )
 
@@ -64,6 +63,7 @@ type WsShip struct {
 	fixedConfirmed                   map[string]bool // hull types whose modular conversion was confirmed
 	optionInfos                      map[string]optionInfo
 	variantInfos                     map[string]variantInfo
+	sharedRooms                      map[string]bool
 	share                            editShare
 }
 
@@ -241,7 +241,7 @@ func (ws *WsShip) rebuild() {
 		return nil
 	}
 	ws.catalog.Hulls[ws.hull] = p.Hull
-	ws.optionInfos, ws.variantInfos, ws.share = nil, nil, editShare{}
+	ws.optionInfos, ws.variantInfos, ws.sharedRooms, ws.share = nil, nil, nil, editShare{}
 	ws.sanitizeSelection()
 	a, err := p.Assemble(ws.currentTheme(), ws.selected)
 	if err != nil {
@@ -390,13 +390,7 @@ func (ws *WsShip) visible(path string) bool {
 	if path == "/turf/template_noop" || path == "/area/template_noop" {
 		return false
 	}
-	// Draft area and docking-port types can be added after the project's
-	// filter was expanded. They must still respect their category's visibility.
-	for _, category := range []string{"/area", "/turf", "/obj", "/mob"} {
-		if strings.HasPrefix(path, category+"/") && ws.app.PathsFilter().IsHiddenPath(category) {
-			return false
-		}
-	}
+
 	return true
 }
 func (ws *WsShip) Owns(file string) bool {
