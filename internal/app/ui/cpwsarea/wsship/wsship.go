@@ -326,7 +326,7 @@ func (ws *WsShip) rebuild() {
 			ws.source = index
 			ws.rebuild()
 			ws.OnFocusChange(true)
-		}, Filter: ws.visible, Overlay: ws.paintRooms})
+		}, Filter: ws.visible, Overlay: ws.paintRooms, Inspect: ws.inspectInstance})
 	}
 	ws.activate(ws.panes[a.Sources[ws.source].File])
 	ws.pane.RenderContext()

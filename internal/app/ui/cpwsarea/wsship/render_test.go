@@ -133,6 +133,10 @@ func TestRenderShipWorkspace(t *testing.T) {
 			t.Fatal(ws.message)
 		}
 		remember()
+		if hull == "delta" {
+			exerciseShipContextContents(t, ws, render)
+			remember()
+		}
 		ws.source = 1
 		ws.rebuild()
 		ws.OnFocusChange(true)
