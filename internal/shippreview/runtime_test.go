@@ -107,7 +107,7 @@ def main():
     assert "dmm-tools" in result.stdout
     assert Image.__version__ == "12.3.0"
     Image.new("RGBA", (32, 32), (19, 88, 120, 255)).save(OUTPUT_DIR / "fixture.png")
-    (OUTPUT_DIR / "manifest.json").write_text(json.dumps({"hulls": {}, "modules": {}}))
+    (OUTPUT_DIR / "manifest.json").write_text(json.dumps({"hulls": {"fixture": {"png": "fixture.png"}}, "modules": {}}))
 `)
 	client.Request(root, filepath.Join(root, "selected.dme"))
 	until(t, func() bool {

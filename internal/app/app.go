@@ -92,6 +92,7 @@ type app struct {
 	closing  bool
 	updates  updateState
 	previews *shippreview.Client
+	notices  *noticesConfig
 
 	shortcutsEnabled bool
 
@@ -132,6 +133,7 @@ func (a *app) initialize() {
 
 	a.UpdateTitle()
 
+	a.loadNotices()
 	a.checkProgramArgs()
 
 	a.updates.ctx, a.updates.cancel = context.WithCancel(context.Background())
@@ -149,6 +151,7 @@ func (a *app) Process() {
 	a.layout.Process()
 
 	dialog.Process()
+	a.showGameCodeUpdateNotice()
 }
 
 func (a *app) PostProcess() {

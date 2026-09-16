@@ -91,29 +91,58 @@ func python() (string, []string, error) {
 // This also covers Save when closing the editor: no pending launch goroutine
 // can be lost during shutdown. The helper owns one queue per project.
 func (c *Client) Request(root, environment string) {
-	c.request(root, environment, false)
+	c.request(root, environment, false, "")
 }
 
 // RequestFull also refreshes unchanged maps after icon or rendering-code edits.
 func (c *Client) RequestFull(root, environment string) {
-	c.request(root, environment, true)
+	c.request(root, environment, true, "")
 }
 
-func (c *Client) request(root, environment string, force bool) {
+func (c *Client) request(root, environment string, force bool, cleanup string) {
 	folder := c.folder(root)
 	c.mu.Lock()
 	c.status[folder] = Status{Phase: "starting", Message: "Starting preview generation...", Log: filepath.Join(folder, "generation.log")}
 	c.checked[folder] = time.Now()
 	c.requested[folder] = time.Now()
 	c.mu.Unlock()
-	if err := c.launch(folder, root, environment, force); err != nil {
+	if err := c.launch(folder, root, environment, force, cleanup); err != nil {
 		c.mu.Lock()
 		c.status[folder] = Status{Phase: "error", Message: "Ship saved. Previews could not start: " + err.Error(), Log: filepath.Join(folder, "generation.log")}
 		c.mu.Unlock()
 	}
 }
 
-func (c *Client) launch(folder, root, environment string, force bool) error {
+func workerPath(folder string) (string, error) {
+	if err := os.MkdirAll(folder, 0700); err != nil {
+		return "", err
+	}
+	// Versioned helpers let an older generation finish during an editor update.
+	helper := filepath.Join(folder, fmt.Sprintf("worker-%x.py", sha256.Sum256(worker)))
+	if _, err := os.Stat(helper); os.IsNotExist(err) {
+		temp, err := os.CreateTemp(folder, "worker-*.tmp")
+		if err != nil {
+			return "", err
+		}
+		defer os.Remove(temp.Name())
+		_, writeErr := temp.Write(worker)
+		closeErr := temp.Close()
+		if writeErr != nil {
+			return "", writeErr
+		}
+		if closeErr != nil {
+			return "", closeErr
+		}
+		if err = os.Rename(temp.Name(), helper); err != nil {
+			return "", err
+		}
+	} else if err != nil {
+		return "", err
+	}
+	return helper, nil
+}
+
+func (c *Client) launch(folder, root, environment string, force bool, cleanup string) error {
 	if !Available(root) {
 		return fmt.Errorf("%s is missing from this project", Script)
 	}
@@ -121,29 +150,8 @@ func (c *Client) launch(folder, root, environment string, force bool) error {
 	if err != nil {
 		return err
 	}
-	if err = os.MkdirAll(folder, 0700); err != nil {
-		return err
-	}
-	// Versioned helpers let an older generation finish during an editor update.
-	helper := filepath.Join(folder, fmt.Sprintf("worker-%x.py", sha256.Sum256(worker)))
-	if _, err = os.Stat(helper); os.IsNotExist(err) {
-		temp, err := os.CreateTemp(folder, "worker-*.tmp")
-		if err != nil {
-			return err
-		}
-		defer os.Remove(temp.Name())
-		_, writeErr := temp.Write(worker)
-		closeErr := temp.Close()
-		if writeErr != nil {
-			return writeErr
-		}
-		if closeErr != nil {
-			return closeErr
-		}
-		if err = os.Rename(temp.Name(), helper); err != nil {
-			return err
-		}
-	} else if err != nil {
+	helper, err := workerPath(folder)
+	if err != nil {
 		return err
 	}
 	log, err := os.OpenFile(filepath.Join(folder, "launcher.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
@@ -154,6 +162,9 @@ func (c *Client) launch(folder, root, environment string, force bool) error {
 	args = append(args, "-B", "-u", helper, folder, root, environment)
 	if force {
 		args = append(args, "--force")
+	}
+	if cleanup != "" {
+		args = append(args, "--cleanup", cleanup)
 	}
 	cmd := exec.Command(executable, args...)
 	cmd.Env = environmentVars

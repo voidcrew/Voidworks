@@ -1,7 +1,11 @@
 package app
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/SpaiR/imgui-go"
+	"github.com/skratchdot/open-golang/open"
 	"sdmm/internal/app/ui/dialog"
 	"sdmm/internal/app/ui/workshop"
 	"sdmm/internal/app/window"
@@ -30,9 +34,26 @@ func (a *app) ShipPreviewStatus() shippreview.Status {
 }
 
 func (a *app) DoShipPreviews() {
+	var plan *shippreview.CleanupPlan
+	var selected []bool
+	var cleanupError string
+	type scanResult struct {
+		plan *shippreview.CleanupPlan
+		err  error
+	}
+	var scanning <-chan scanResult
+	project := ""
+	if dme := a.LoadedEnvironment(); dme != nil {
+		project = dme.RootDir
+	}
 	dialog.Open(dialog.TypeCustom{Title: "Ship purchase previews", CloseButton: true, Layout: w.Layout{
 		w.Custom(func() {
-			imgui.Dummy(imgui.Vec2{X: 420 * window.PointSize()})
+			width := min(540*window.PointSize(), max(1, imgui.MainViewport().WorkSize().X-70*window.PointSize()))
+			height := min(620*window.PointSize(), max(1, imgui.MainViewport().WorkSize().Y-90*window.PointSize()))
+			imgui.BeginChildV("ship-preview-settings", imgui.Vec2{X: width, Y: height}, false, 0)
+			defer imgui.EndChild()
+			imgui.PushTextWrapPosV(0)
+			defer imgui.PopTextWrapPos()
 			imgui.TextWrapped("Ship saves refresh changed or missing purchase previews in the background and reuse unchanged images. You can keep editing or close the editor while they finish.")
 			workshop.Gap()
 			status := a.ShipPreviewStatus()
@@ -46,6 +67,87 @@ func (a *app) DoShipPreviews() {
 					if dme := a.LoadedEnvironment(); dme != nil {
 						a.previews.RequestFull(dme.RootDir, dme.RootFile)
 					}
+				}
+			}
+			workshop.Gap()
+			imgui.Separator()
+			imgui.TextWrapped("Unused preview cleanup")
+			imgui.TextWrapped("Save your ship changes first. Unchanged previews made obsolete by a save are backed up automatically. Review older leftovers across the project here.")
+			select {
+			case result := <-scanning:
+				scanning = nil
+				plan = result.plan
+				if result.err != nil {
+					cleanupError = result.err.Error()
+				} else {
+					selected = make([]bool, len(plan.Files))
+					for i := range selected {
+						selected[i] = true
+					}
+				}
+			default:
+			}
+			busy := status.Phase == "running" || status.Phase == "starting" || scanning != nil
+			imgui.BeginDisabledV(busy || project == "")
+			if imgui.Button("Review unused previews") {
+				plan, cleanupError = nil, ""
+				result := make(chan scanResult, 1)
+				scanning = result
+				go func() {
+					plan, err := a.previews.ScanCleanup(project)
+					result <- scanResult{plan, err}
+				}()
+			}
+			imgui.EndDisabled()
+			if scanning != nil {
+				imgui.TextWrapped("Checking the preview manifest and image files...")
+			}
+			if plan != nil {
+				imgui.TextWrapped(fmt.Sprintf("%d PNG files are not listed in the current preview manifest.", len(plan.Files)))
+				if len(plan.Files) > 0 {
+					imgui.TextWrapped(plan.Directory)
+					imgui.TextWrapped("Uncheck anything you want to keep. Maps, code, subfolders and linked files are excluded. Current previews are checked again before cleanup; changed files are kept.")
+					imgui.BeginChildV("unused-preview-files", imgui.Vec2{Y: 150 * window.PointSize()}, true, 0)
+					count := 0
+					for i, file := range plan.Files {
+						imgui.PushIDInt(i)
+						imgui.Checkbox("##selected", &selected[i])
+						imgui.SameLine()
+						imgui.Text(file.Name)
+						imgui.PopID()
+						if selected[i] {
+							count++
+						}
+					}
+					imgui.EndChild()
+					imgui.BeginDisabledV(busy || count == 0)
+					if imgui.Button(fmt.Sprintf("Move %d selected previews to backup", count)) {
+						if dme := a.LoadedEnvironment(); dme != nil && dme.RootDir == project {
+							approved := *plan
+							approved.Files = nil
+							for i, file := range plan.Files {
+								if selected[i] {
+									approved.Files = append(approved.Files, file)
+								}
+							}
+							if err := a.previews.RequestCleanup(project, dme.RootFile, approved); err != nil {
+								cleanupError = err.Error()
+							} else {
+								plan = nil
+							}
+							busy = true
+						}
+					}
+					imgui.EndDisabled()
+				}
+			}
+			if cleanupError != "" {
+				imgui.TextWrapped(cleanupError)
+			}
+			imgui.TextWrapped("Cleanup backups are kept outside the game project until you remove them. To restore, copy the PNGs back to the previews folder. This cannot be undone with Ctrl+Z.")
+			if backup := a.previews.CleanupBackups(project); project != "" {
+				if _, err := os.Stat(backup); err == nil && imgui.Button("Open cleanup backups") {
+					_ = open.Run(backup)
 				}
 			}
 			workshop.Gap()
