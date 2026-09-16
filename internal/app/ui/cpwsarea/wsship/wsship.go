@@ -74,7 +74,7 @@ func New(app App, busy ...func(string) bool) *WsShip {
 		ws.SourceBusy = busy[0]
 	}
 	var err error
-	ws.catalog, err = ship.Discover(app.LoadedEnvironment())
+	ws.catalog, err = ship.ReloadCatalog(app.LoadedEnvironment())
 	if err != nil {
 		ws.message = err.Error()
 		return ws

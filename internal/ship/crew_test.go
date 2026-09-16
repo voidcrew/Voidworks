@@ -3,12 +3,47 @@ package ship
 import (
 	"bytes"
 	"os"
+	"reflect"
 	"testing"
 
 	"sdmm/internal/dmapi/dmenv"
 	"sdmm/internal/dmapi/dmvars"
 	"sdmm/internal/util"
 )
+
+func TestCrewScopesFollowVariantRooms(t *testing.T) {
+	p := &Project{Dme: &dmenv.Dme{Objects: map[string]*dmenv.Object{}}, Hull: Hull{
+		Type: HullType + "/crew_fixture", Slots: []string{"bay", "bridge"},
+		Themes: []Theme{{ID: "standard"}, {ID: "medical", Slots: []string{"bay"}}, {ID: "empty", Slots: []string{}}},
+		Modules: []Module{
+			{ID: "shared", Slot: "bay", Themes: []string{"standard", "medical", "empty"}},
+			{ID: "cargo", Slot: "bay", Themes: []string{"standard"}},
+			{ID: "surgery", Slot: "bay", Themes: []string{"medical"}},
+			{ID: "bridge", Slot: "bridge", Themes: []string{"standard", "medical"}},
+			{ID: "unthemed", Slot: "bay"},
+		},
+	}}
+	for _, test := range []struct {
+		theme Theme
+		want  []string
+	}{
+		{p.Hull.Themes[0], []string{"ship", "theme/standard", "module/shared", "module/cargo", "module/bridge"}},
+		{p.Hull.Themes[1], []string{"ship", "theme/medical", "module/shared", "module/surgery"}},
+		{p.Hull.Themes[2], []string{"ship", "theme/empty"}},
+		{Theme{}, []string{"ship", "module/unthemed"}},
+	} {
+		var got []string
+		for _, scope := range p.CrewScopesForTheme(test.theme) {
+			got = append(got, scope.ID)
+		}
+		if !reflect.DeepEqual(got, test.want) {
+			t.Fatalf("variant %q: rosters %v, want %v", test.theme.ID, got, test.want)
+		}
+	}
+	if len(p.CrewScopes()) != 9 {
+		t.Fatal("filtering the view removed rosters from the complete project")
+	}
+}
 
 func TestCrewLiteralPreservesSurroundingSource(t *testing.T) {
 	source := []byte("// job_slots = list(bad)\r\n/datum/example\r\n\tname = \"Example\"\r\n\tjob_slots = list(\r\n\t\tlist(name = \"A, B\", outfit = /datum/outfit/job/assistant, category = JOB_CAT_ASSISTANT, slots = 2, extra = list(\"a=b\", 3)),\r\n\t) // preserve this\r\n\tcost = 123\r\n\n/datum/example/proc/run()\r\n\treturn list(1, 2)\r\n")

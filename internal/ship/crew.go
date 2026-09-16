@@ -72,6 +72,28 @@ func (p *Project) CrewScopes() []CrewScope {
 	}
 	return scopes
 }
+
+// CrewScopesForTheme lists the rosters that can contribute crew to this variant.
+// Keep CrewScopes unfiltered for saving and validating the complete project.
+func (p *Project) CrewScopesForTheme(theme Theme) []CrewScope {
+	available := map[string]bool{"ship": true}
+	if theme.ID != "" {
+		available["theme/"+theme.ID] = true
+	}
+	for _, m := range p.Hull.Modules {
+		if m.Available(theme.ID) && Contains(p.Hull.SlotsFor(theme), m.Slot) {
+			available["module/"+m.ID] = true
+		}
+	}
+	var scopes []CrewScope
+	for _, scope := range p.CrewScopes() {
+		if available[scope.ID] {
+			scopes = append(scopes, scope)
+		}
+	}
+	return scopes
+}
+
 func (p *Project) crewScope(id string) (CrewScope, error) {
 	for _, s := range p.CrewScopes() {
 		if s.ID == id {

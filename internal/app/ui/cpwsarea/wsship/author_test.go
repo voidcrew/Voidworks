@@ -334,6 +334,7 @@ func exerciseAuthoring(t *testing.T, ws *WsShip, dme *dmenv.Dme, render func()) 
 	}
 	capture("review-save")
 	exerciseCrew(t, ws, render, false)
+	exerciseVariantCrew(t, ws, render)
 	exerciseCosts(t, ws, render, false)
 	exerciseShipDetails(t, ws, render)
 	exerciseRenaming(t, ws, render)

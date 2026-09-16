@@ -15,6 +15,7 @@ func exerciseCrew(t *testing.T, ws *WsShip, render func(), legacy bool) {
 	t.Helper()
 	ws.setStage(stepBuild)
 	ws.beginCrew()
+	ws.loadCrewScope("ship")
 	// The temporary DME includes the real game; copy the GAGS recipe used by
 	// this test so its worn-color layers resolve from the fixture root too.
 	if original := os.Getenv("SHIP_RENDER_TEST_DME"); original != "" {

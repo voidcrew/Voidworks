@@ -138,6 +138,12 @@ func exerciseFixedShipConversion(t *testing.T, ws *WsShip, render func()) {
 	if project.Hull.Fixed || !ship.Contains(project.Hull.Slots, "fixed_bay") {
 		t.Fatal("redo did not restore the conversion")
 	}
+	for _, variant := range []string{"standard", "cargo"} {
+		ws.change("Add variant", func() error { return project.AddTheme(0, variant, variant, false) })
+		if ws.message != "" {
+			t.Fatal(ws.message)
+		}
+	}
 	if !ws.Save() {
 		t.Fatal(ws.message)
 	}
@@ -146,30 +152,39 @@ func exerciseFixedShipConversion(t *testing.T, ws *WsShip, render func()) {
 	if !strings.Contains(text, "\thas_upgrade_slots = TRUE\n") || !strings.Contains(text, "\tupgrade_slot_ids = list(\"fixed_bay\")\n") || !strings.Contains(text, "PART_CLASS_SCIENCE = 2") || !strings.Contains(text, "name = \"Skipper\"") {
 		t.Fatalf("conversion did not keep the definition and enable slots:\n%s", text)
 	}
-	fresh, err := dmenv.New(dmeFile)
-	if err != nil {
-		t.Fatal("converted ship definitions did not parse:", err)
+	// Ctrl+W disposes the workshop, but leaves the application's DME loaded.
+	// Reopen through the real constructor, without manually reparsing that DME.
+	app := ws.app
+	ws.Dispose()
+	*ws = *New(app)
+	if ws.message != "" {
+		t.Fatal(ws.message)
 	}
-	if fresh.Objects[ship.HullType+"/fixed_fixture"].Vars.IntV("has_upgrade_slots", 0) == 0 {
-		t.Fatal("game does not see the converted ship as modular")
+	if app.LoadedEnvironment() != environment {
+		t.Fatal("reopening replaced the application's environment")
 	}
-	rediscovered, err := ship.Discover(fresh)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, h := range rediscovered.Hulls {
+	for i, h := range ws.catalog.Hulls {
 		if h.Type != ship.HullType+"/fixed_fixture" {
 			continue
 		}
-		if h.Fixed || !ship.Contains(h.Slots, "fixed_bay") || len(h.Modules) != 1 || h.Modules[0].Slot != "fixed_bay" {
+		if h.Fixed || !ship.Contains(h.Slots, "fixed_bay") || len(h.Modules) != 1 || h.Modules[0].Slot != "fixed_bay" || len(h.Themes) != 2 {
 			t.Fatalf("converted ship was not rediscovered as modular: %+v", h)
 		}
-		reopened, err := ship.OpenProject(rediscovered, fresh, h)
-		if err != nil {
-			t.Fatal(err)
+		ws.hull, ws.theme = i, 0
+		ws.defaults()
+		ws.rebuild()
+		ws.setStage(stepBuild)
+		if ws.message != "" || ws.assembly == nil || len(ws.assembly.Sources) != 2 || ws.IsModified() {
+			t.Fatalf("saved room did not reopen cleanly: %s", ws.message)
 		}
-		if a, err := reopened.Assemble(ship.Theme{}, map[string]string{"fixed_bay": h.Modules[0].ID}); err != nil || len(a.Sources) != 2 {
-			t.Fatalf("converted room did not reopen: %v", err)
+		render()
+		// Source locations and registration values must also be current: a
+		// refreshed label alone would still fail on the next edit and save.
+		ws.beginRename(taskRenameModule, h.Modules[0].ID, h.Modules[0].Name)
+		ws.itemName = "Reopened bay"
+		ws.applyRename()
+		if ws.message != "" || !ws.Save() {
+			t.Fatalf("could not edit and save the reopened room: %s", ws.message)
 		}
 		return
 	}

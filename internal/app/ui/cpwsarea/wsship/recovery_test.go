@@ -36,6 +36,7 @@ func exerciseRecovery(t *testing.T, ws *WsShip, render func()) {
 	}
 	ws.projects[hidden.Hull.Type] = hidden
 	ws.beginCrew()
+	ws.loadCrewScope("ship")
 	if len(ws.crew.jobs) == 0 {
 		t.Fatal("recovery fixture has no crew")
 	}

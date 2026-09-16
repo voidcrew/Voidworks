@@ -11,6 +11,7 @@ func exerciseTransitions(t *testing.T, ws *WsShip, render func()) {
 	t.Helper()
 	ws.setStage(stepBuild)
 	ws.beginCrew()
+	ws.loadCrewScope("ship")
 	original := ws.crew.jobs[0].Name
 	ws.crew.jobs[0].Name = ""
 	ws.crew.dirty = true

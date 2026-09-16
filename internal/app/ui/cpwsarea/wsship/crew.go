@@ -35,7 +35,6 @@ func (ws *WsShip) beginCrew() {
 	ws.OnFocusChange(false)
 	ws.task = taskCrew
 	ws.crew = crewEditor{selected: -1, direction: 2}
-	ws.crew.scopes = ws.project.CrewScopes()
 	ws.crewVisual = crewVisual{}
 	for path, o := range ws.project.Dme.Objects {
 		if strings.HasPrefix(path, "/obj/item/") {
@@ -47,10 +46,54 @@ func (ws *WsShip) beginCrew() {
 	}
 	sort.Strings(ws.crew.items)
 	sort.Strings(ws.crew.outfits)
-	ws.loadCrewScope("ship")
+	ws.loadCrewScope(ws.variantCrewScope())
 	tools.SetEnabled(false)
 }
+
+func (ws *WsShip) variantCrewScope() string {
+	if theme := ws.currentTheme(); theme.ID != "" {
+		return "theme/" + theme.ID
+	}
+	return "ship"
+}
+
+func (ws *WsShip) switchCrewTheme(index int) {
+	if index < 0 || index >= len(ws.project.Hull.Themes) || index == ws.theme || !ws.commitCrew() {
+		return
+	}
+	scope := ws.crew.scope
+	ws.switchTheme(index)
+	ws.crew.scopes = ws.project.CrewScopesForTheme(ws.currentTheme())
+	// Keep a room roster only if that option is available in the new variant.
+	// Otherwise select the variant's own crew, never an invisible room.
+	for _, s := range ws.crew.scopes {
+		if s.ID == scope && strings.HasPrefix(scope, "module/") {
+			ws.loadCrewScope(scope)
+			return
+		}
+	}
+	ws.loadCrewScope(ws.variantCrewScope())
+}
+
 func (ws *WsShip) loadCrewScope(scope string) {
+	// Context menus, undo and recovery can target a variant other than the
+	// one currently displayed. Keep the selector and its room list in sync.
+	if strings.HasPrefix(scope, "theme/") {
+		if index := ws.themeIndexByID(strings.TrimPrefix(scope, "theme/")); index >= 0 {
+			ws.switchTheme(index)
+		}
+	} else if m, ok := ws.module(strings.TrimPrefix(scope, "module/")); strings.HasPrefix(scope, "module/") && ok {
+		theme := ws.currentTheme()
+		if !m.Available(theme.ID) || !ship.Contains(ws.project.Hull.SlotsFor(theme), m.Slot) {
+			for i, candidate := range ws.project.Hull.Themes {
+				if m.Available(candidate.ID) && ship.Contains(ws.project.Hull.SlotsFor(candidate), m.Slot) {
+					ws.switchTheme(i)
+					break
+				}
+			}
+		}
+	}
+	ws.crew.scopes = ws.project.CrewScopesForTheme(ws.currentTheme())
 	jobs, err := ws.project.CrewJobs(scope)
 	if err != nil {
 		ws.crew.error = err.Error()
@@ -92,6 +135,17 @@ func (ws *WsShip) commitCrew() bool {
 	tools.SetEnabled(false)
 	return true
 }
+
+func (ws *WsShip) crewScopeLabel(s ship.CrewScope) string {
+	if s.ID == "ship" && len(ws.project.Hull.Themes) > 0 {
+		return "Ship crew (shared)"
+	}
+	if strings.HasPrefix(s.ID, "theme/") {
+		return "Variant crew"
+	}
+	return s.Name
+}
+
 func (ws *WsShip) crewControls() {
 	c := &ws.crew
 	if actionButton("< Back to ship", false) && ws.commitCrew() {
@@ -100,15 +154,23 @@ func (ws *WsShip) crewControls() {
 		return
 	}
 	workshop.Section("CREW ROSTER", style.Violet)
+	if len(ws.project.Hull.Themes) > 0 && combo("Variant", ws.currentTheme().Name) {
+		for i, theme := range ws.project.Hull.Themes {
+			if imgui.SelectableV(theme.Name, i == ws.theme, 0, imgui.Vec2{}) {
+				ws.switchCrewTheme(i)
+			}
+		}
+		imgui.EndCombo()
+	}
 	preview := "Ship crew"
 	for _, s := range c.scopes {
 		if s.ID == c.scope {
-			preview = s.Name
+			preview = ws.crewScopeLabel(s)
 		}
 	}
 	if comboHelp("Roster", preview, "Ship crew is the base roster. A variant can replace it. Room options add jobs when installed.") {
 		for _, s := range c.scopes {
-			if imgui.SelectableV(s.Name, c.scope == s.ID, 0, imgui.Vec2{}) && ws.commitCrew() {
+			if imgui.SelectableV(ws.crewScopeLabel(s)+"##"+s.ID, c.scope == s.ID, 0, imgui.Vec2{}) && ws.commitCrew() {
 				ws.loadCrewScope(s.ID)
 			}
 		}
@@ -119,6 +181,18 @@ func (ws *WsShip) crewControls() {
 	}
 	if strings.HasPrefix(c.scope, "module/") {
 		hint("These slots are added when this room option is installed.")
+		if m, ok := ws.module(strings.TrimPrefix(c.scope, "module/")); ok {
+			var variants []string
+			for _, theme := range ws.project.Hull.Themes {
+				if m.Available(theme.ID) && ship.Contains(ws.project.Hull.SlotsFor(theme), m.Slot) {
+					variants = append(variants, theme.Name)
+				}
+			}
+			if len(variants) > 1 {
+				hint("This room's crew is shared across variants.")
+				tooltip(strings.Join(variants, ", "))
+			}
+		}
 	}
 	space()
 	total := 0
@@ -146,7 +220,7 @@ func (ws *WsShip) crewControls() {
 		ws.commitCrew()
 		ws.armCrewPicker()
 	}
-	if strings.HasPrefix(c.scope, "theme/") && len(c.jobs) == 0 && actionButton("Copy ship crew into this variant", false) {
+	if strings.HasPrefix(c.scope, "theme/") && len(c.jobs) == 0 && actionButton("Copy ship crew", false) {
 		jobs, e := ws.project.CrewJobs("ship")
 		if e != nil {
 			c.error = e.Error()
@@ -197,7 +271,10 @@ func (ws *WsShip) crewItemName(path string) string {
 func (ws *WsShip) crewContent() {
 	c := &ws.crew
 	if c.selected < 0 || c.selected >= len(c.jobs) {
-		if len(c.jobs) == 0 {
+		if len(c.jobs) == 0 && strings.HasPrefix(c.scope, "theme/") {
+			title("Uses ship crew")
+			hint("Copy the ship crew into this variant to customize it, or create a job.")
+		} else if len(c.jobs) == 0 {
 			title("Build your crew")
 			hint("Create a job in the roster to set its role and starting equipment.")
 		} else {
