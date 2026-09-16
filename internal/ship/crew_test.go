@@ -36,6 +36,13 @@ func TestCrewScopesFollowVariantRooms(t *testing.T) {
 		for _, scope := range p.CrewScopesForTheme(test.theme) {
 			got = append(got, scope.ID)
 		}
+		if test.theme.ID != "" {
+			for i, scope := range test.want {
+				if module, _ := RoomCrewIDs(scope); module != "" {
+					test.want[i] = p.RoomCrewScope(module, test.theme.ID)
+				}
+			}
+		}
 		if !reflect.DeepEqual(got, test.want) {
 			t.Fatalf("variant %q: rosters %v, want %v", test.theme.ID, got, test.want)
 		}

@@ -52,6 +52,9 @@ func (p *Project) CaptureRecovery() ([]byte, error) {
 	// Version 2 preserves slot-assignment rewrites; older editors must not
 	// restore them without the corresponding source rewrite support.
 	r := recoveryProject{Version: 2, Environment: p.Dme.RootFile, Documents: map[string]recoveryDocument{}}
+	if p.Crew != nil && len(p.Crew.ModuleThemes) > 0 {
+		r.Version = 3 // Older editors do not preserve independent room rosters.
+	}
 	r.Hull = p.Hull
 	r.Settings = p.Settings
 	r.Files = p.files
@@ -109,7 +112,7 @@ func RecoverProject(c *Catalog, dme *dmenv.Dme, data []byte) (*Project, error) {
 	if err := json.Unmarshal(data, &r); err != nil {
 		return nil, err
 	}
-	if (r.Version != 1 && r.Version != 2) || !sameRecoveryPath(r.Environment, dme.RootFile) {
+	if (r.Version < 1 || r.Version > 3) || !sameRecoveryPath(r.Environment, dme.RootFile) {
 		return nil, fmt.Errorf("recovery belongs to a different project or version")
 	}
 	if !strings.HasPrefix(r.Hull.Type, HullType+"/") {

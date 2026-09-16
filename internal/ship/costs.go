@@ -151,7 +151,7 @@ func parsePartCosts(raw string) (PartCosts, error) {
 }
 
 func (p *Project) CostScopes() []CostScope {
-	crew := p.CrewScopes()
+	crew := p.baseCrewScopes()
 	scopes := []CostScope{{ID: "ship", Name: p.Hull.Name, Kind: "Hull", Type: p.Hull.Type, Field: "part_requirements", Default: true}}
 	for _, s := range crew[1:] {
 		one := CostScope{ID: s.ID, Name: s.Name, Type: s.Type, Field: "part_cost"}

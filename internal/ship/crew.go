@@ -12,7 +12,12 @@ import (
 
 // Crew stores only rosters explicitly edited in the workshop. Unedited variants
 // keep the game's inheritance rules. Item overrides are local outfit subtypes.
-type CrewConfig struct{ Rosters map[string][]CrewJob }
+type CrewConfig struct {
+	Rosters map[string][]CrewJob
+	// A present module entry replaces its complete per-variant override list.
+	// An empty entry means every variant uses the shared roster again.
+	ModuleThemes map[string]map[string][]CrewJob `json:",omitempty"`
+}
 type CrewJob struct {
 	ID, Name, Outfit, BaseOutfit, Category string
 	Slots                                  int
@@ -39,7 +44,7 @@ var EquipmentSlots = []EquipmentSlot{
 	{"l_hand", "Left hand", 0}, {"r_hand", "Right hand", 0}, {"accessory", "Accessory", 0}, {"box", "Survival box", 0},
 }
 
-func (p *Project) CrewScopes() []CrewScope {
+func (p *Project) baseCrewScopes() []CrewScope {
 	scopes := []CrewScope{{"ship", "Ship crew", p.Hull.Type, "job_slots"}}
 	id, _ := p.roomID()
 	themes, modules := map[string]string{}, map[string]string{}
@@ -73,6 +78,19 @@ func (p *Project) CrewScopes() []CrewScope {
 	return scopes
 }
 
+func (p *Project) CrewScopes() []CrewScope {
+	scopes := p.baseCrewScopes()
+	for _, m := range p.Hull.Modules {
+		for _, t := range p.Hull.Themes {
+			if p.hasRoomCrewVariant(m.ID, t.ID) {
+				s, _ := p.crewScope(roomCrewScope(m.ID, t.ID))
+				scopes = append(scopes, s)
+			}
+		}
+	}
+	return scopes
+}
+
 // CrewScopesForTheme lists the rosters that can contribute crew to this variant.
 // Keep CrewScopes unfiltered for saving and validating the complete project.
 func (p *Project) CrewScopesForTheme(theme Theme) []CrewScope {
@@ -86,8 +104,14 @@ func (p *Project) CrewScopesForTheme(theme Theme) []CrewScope {
 		}
 	}
 	var scopes []CrewScope
-	for _, scope := range p.CrewScopes() {
+	for _, scope := range p.baseCrewScopes() {
 		if available[scope.ID] {
+			if module, _ := RoomCrewIDs(scope.ID); module != "" {
+				scope.ID = p.RoomCrewScope(module, theme.ID)
+				if _, variant := RoomCrewIDs(scope.ID); variant != "" {
+					scope.Field = roomCrewField
+				}
+			}
 			scopes = append(scopes, scope)
 		}
 	}
@@ -95,7 +119,15 @@ func (p *Project) CrewScopesForTheme(theme Theme) []CrewScope {
 }
 
 func (p *Project) crewScope(id string) (CrewScope, error) {
-	for _, s := range p.CrewScopes() {
+	if module, theme := RoomCrewIDs(id); theme != "" {
+		if p.themeIndex(theme) < 0 {
+			return CrewScope{}, fmt.Errorf("crew variant no longer exists")
+		}
+		s, err := p.crewScope("module/" + module)
+		s.ID, s.Field = id, roomCrewField
+		return s, err
+	}
+	for _, s := range p.baseCrewScopes() {
 		if s.ID == id {
 			return s, nil
 		}
@@ -157,7 +189,7 @@ func (p *Project) openCrew() error {
 		return fmt.Errorf("crew outfits were edited outside the workshop: %s; reload the matching crew project before editing", code)
 	}
 	if p.Settings == nil {
-		for scope, old := range config.Rosters {
+		for scope, old := range p.editedCrewRosters() {
 			s, e := p.crewScope(scope)
 			if e != nil {
 				return e
@@ -173,7 +205,11 @@ func (p *Project) openCrew() error {
 					}
 				}
 			}
-			config.Rosters[scope] = jobs
+			if module, theme := RoomCrewIDs(scope); theme != "" {
+				config.ModuleThemes[module][theme] = jobs
+			} else {
+				config.Rosters[scope] = jobs
+			}
 		}
 	}
 	p.savedCrew = p.crewBytes()
@@ -187,6 +223,17 @@ func (p *Project) openCrew() error {
 	return nil
 }
 func (p *Project) readCrew(s CrewScope) ([]CrewJob, error) {
+	if module, theme := RoomCrewIDs(s.ID); theme != "" {
+		rosters, err := p.readRoomCrew(module)
+		if jobs, own := rosters[theme]; own || err != nil {
+			return CloneCrewJobs(jobs), err
+		}
+		base, err := p.crewScope("module/" + module)
+		if err != nil {
+			return nil, err
+		}
+		return p.readCrew(base)
+	}
 	if p.Settings != nil && s.ID == "ship" {
 		j := []CrewJob{{Name: "Captain", Outfit: "/datum/outfit/job/captain", Category: "Command", Slots: 1, Officer: true}}
 		if p.Settings.Crew > 1 {
@@ -200,6 +247,16 @@ func (p *Project) readCrew(s CrewScope) ([]CrewJob, error) {
 	return nil, nil
 }
 func (p *Project) CrewJobs(scope string) ([]CrewJob, error) {
+	if module, theme := RoomCrewIDs(scope); theme != "" {
+		if _, err := p.crewScope(scope); err != nil {
+			return nil, err
+		}
+		rosters, err := p.roomCrewVariants(module)
+		if jobs, own := rosters[theme]; own || err != nil {
+			return CloneCrewJobs(jobs), err
+		}
+		return p.CrewJobs("module/" + module)
+	}
 	if p.Crew != nil {
 		if j, ok := p.Crew.Rosters[scope]; ok {
 			return CloneCrewJobs(j), nil
@@ -316,12 +373,23 @@ func (p *Project) ValidateCrew(jobs []CrewJob) error {
 	return nil
 }
 func (p *Project) SetCrewJobs(scope string, jobs []CrewJob) error {
+	module, theme := RoomCrewIDs(scope)
+	if theme != "" && !p.SupportsRoomCrewVariants() {
+		return fmt.Errorf("this game project needs per-variant room crew support")
+	}
+	if theme != "" && !p.hasRoomCrewVariant(module, theme) {
+		// Legacy room crew supplies the initial values, never shared outfit IDs.
+		jobs = CloneCrewJobs(jobs)
+		for i := range jobs {
+			jobs[i].ID = ""
+		}
+	}
 	if e := p.ValidateCrew(jobs); e != nil {
 		return e
 	}
 	ids := map[string]bool{}
 	if p.Crew != nil {
-		for key, roster := range p.Crew.Rosters {
+		for key, roster := range p.editedCrewRosters() {
 			if key != scope {
 				for _, j := range roster {
 					if j.ID != "" {
@@ -372,10 +440,45 @@ func (p *Project) SetCrewJobs(scope string, jobs []CrewJob) error {
 				return e
 			}
 		}
-		if _, e = rewriteCrewList(p.files[file].Before, s.Type, s.Field, renderCrew(jobs, p)); e != nil {
+		value := renderCrew(jobs, p)
+		if theme != "" {
+			rosters, err := p.roomCrewVariants(module)
+			if err != nil {
+				return err
+			}
+			value = renderRoomCrew(rosters, p)
+		}
+		if _, e = rewriteCrewList(p.files[file].Before, s.Type, s.Field, value); e != nil {
 			return e
 		}
-		if _, edited := p.crewOriginal[scope]; !edited {
+		if theme != "" {
+			// The first edit must agree with the parsed game, just like base crew.
+			alreadyEdited := false
+			for original := range p.crewOriginal {
+				id, variant := RoomCrewIDs(original)
+				alreadyEdited = alreadyEdited || id == module && variant != ""
+			}
+			if !alreadyEdited {
+				raw, _, explicit, err := sourceCostList(p.files[file].Before, s.Type, roomCrewField)
+				if err != nil {
+					return err
+				}
+				if explicit {
+					source, err := parseRoomCrew(raw)
+					if err != nil {
+						return err
+					}
+					loaded, err := p.readRoomCrew(module)
+					if err != nil {
+						return err
+					}
+					if renderRoomCrew(source, p) != renderRoomCrew(loaded, p) {
+						return fmt.Errorf("room crew differs from the loaded environment; reload before editing")
+					}
+				}
+			}
+		}
+		if _, edited := p.crewOriginal[scope]; !edited && theme == "" {
 			source, explicit, e := sourceCrew(p.files[file].Before, s.Type, s.Field)
 			if e != nil {
 				return e
@@ -405,7 +508,7 @@ func (p *Project) SetCrewJobs(scope string, jobs []CrewJob) error {
 		used[id] = true
 	}
 	if p.Crew != nil {
-		for _, roster := range p.Crew.Rosters {
+		for _, roster := range p.editedCrewRosters() {
 			for _, j := range roster {
 				used[j.ID] = true
 			}
@@ -433,7 +536,21 @@ func (p *Project) SetCrewJobs(scope string, jobs []CrewJob) error {
 	if p.Crew == nil {
 		p.Crew = &CrewConfig{Rosters: map[string][]CrewJob{}}
 	}
-	p.Crew.Rosters[scope] = jobs
+	if theme != "" {
+		if p.Crew.ModuleThemes == nil {
+			p.Crew.ModuleThemes = map[string]map[string][]CrewJob{}
+		}
+		if _, ok := p.Crew.ModuleThemes[module]; !ok {
+			rosters, err := p.readRoomCrew(module)
+			if err != nil {
+				return err
+			}
+			p.Crew.ModuleThemes[module] = rosters
+		}
+		p.Crew.ModuleThemes[module][theme] = jobs
+	} else {
+		p.Crew.Rosters[scope] = jobs
+	}
 	return nil
 }
 func (p *Project) crewOutfitPath(j CrewJob) string {
@@ -483,12 +600,13 @@ func (p *Project) crewOutfits() []byte {
 		return []byte(b.String())
 	}
 	keys := []string{}
-	for k := range p.Crew.Rosters {
+	rosters := p.editedCrewRosters()
+	for k := range rosters {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		for _, j := range p.Crew.Rosters[k] {
+		for _, j := range rosters[k] {
 			if j.BaseOutfit == "" {
 				continue
 			}
@@ -548,6 +666,9 @@ func (p *Project) crewChanges(changes []FileChange) ([]FileChange, error) {
 	}
 	if p.Settings == nil {
 		for key, jobs := range rosters {
+			if _, theme := RoomCrewIDs(key); theme != "" {
+				continue
+			}
 			s, e := p.crewScope(key)
 			if e != nil {
 				if p.Crew == nil {
@@ -579,6 +700,31 @@ func (p *Project) crewChanges(changes []FileChange) ([]FileChange, error) {
 				return nil, e
 			}
 			contents[file] = b
+		}
+		for _, module := range p.editedRoomCrewModules() {
+			s, e := p.crewScope("module/" + module)
+			if e != nil {
+				return nil, e
+			}
+			file := ""
+			if p.Dme.Objects[s.Type] != nil {
+				file, e = p.roomTypeFile(s.Type)
+			} else if p.rooms != nil {
+				file = p.generatedSourceFile(s.ID)
+			} else {
+				e = fmt.Errorf("cannot locate room crew source")
+			}
+			if e != nil {
+				return nil, e
+			}
+			variants, e := p.roomCrewVariants(module)
+			if e != nil {
+				return nil, e
+			}
+			contents[file], e = rewriteCrewList(get(file), s.Type, roomCrewField, renderRoomCrew(variants, p))
+			if e != nil {
+				return nil, e
+			}
 		}
 	}
 	content := p.crewBytes()

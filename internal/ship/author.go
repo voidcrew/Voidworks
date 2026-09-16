@@ -92,6 +92,20 @@ func (p *Project) registration() ([]byte, []byte, error) {
 			}
 		}
 	}
+	for _, module := range p.editedRoomCrewModules() {
+		s, err := p.crewScope("module/" + module)
+		if err != nil {
+			return nil, nil, err
+		}
+		variants, err := p.roomCrewVariants(module)
+		if err != nil {
+			return nil, nil, err
+		}
+		moduleBytes, err = rewriteCrewList(moduleBytes, s.Type, roomCrewField, renderRoomCrew(variants, p))
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	return p.applyGeneratedCosts(hullBytes, moduleBytes)
 }
 
@@ -252,7 +266,11 @@ func (p *Project) AddModule(themeIndex int, base Module, id, name string, empty 
 	var jobs []CrewJob
 	if !empty {
 		var err error
-		jobs, err = p.CrewJobs("module/" + base.ID)
+		theme, themeErr := p.roomTheme(themeIndex)
+		if themeErr != nil {
+			return themeErr
+		}
+		jobs, err = p.CrewJobs(p.RoomCrewScope(base.ID, theme.ID))
 		if err != nil {
 			return err
 		}

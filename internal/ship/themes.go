@@ -534,6 +534,24 @@ func (p *Project) AddTheme(baseIndex int, id, name string, copyRooms bool) error
 		}
 	}
 	p.Hull.Themes = append(p.Hull.Themes, theme)
+	for _, module := range p.Hull.Modules {
+		if !module.Available(base.ID) || !p.SupportsRoomCrewVariants() {
+			continue
+		}
+		jobs, e := p.CrewJobs(p.RoomCrewScope(module.ID, base.ID))
+		if e != nil {
+			return e
+		}
+		if len(jobs) == 0 && !p.hasRoomCrewVariant(module.ID, base.ID) {
+			continue
+		}
+		for i := range jobs {
+			jobs[i].ID = ""
+		}
+		if e = p.SetCrewJobs(roomCrewScope(module.ID, id), jobs); e != nil {
+			return e
+		}
+	}
 	if p.Crew != nil {
 		if jobs, ok := p.Crew.Rosters["theme/"+base.ID]; ok {
 			jobs = CloneCrewJobs(jobs)
@@ -598,6 +616,13 @@ func (p *Project) RemoveTheme(id string) error {
 		}
 		retire = append(retire, themed)
 	}
+	for _, module := range p.Hull.Modules {
+		if p.hasRoomCrewVariant(module.ID, id) {
+			if err = p.clearRoomCrewVariant(module.ID, id); err != nil {
+				return err
+			}
+		}
+	}
 	p.Hull.Themes = append(p.Hull.Themes[:i], p.Hull.Themes[i+1:]...)
 	for j, m := range p.Hull.Modules {
 		if Contains(m.Themes, id) {
@@ -616,6 +641,9 @@ func (p *Project) RemoveTheme(id string) error {
 	}
 	if p.Crew != nil {
 		delete(p.Crew.Rosters, "theme/"+id)
+		for _, variants := range p.Crew.ModuleThemes {
+			delete(variants, id)
+		}
 	}
 	delete(p.partCosts, "theme/"+id)
 	return nil

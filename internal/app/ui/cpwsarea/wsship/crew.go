@@ -27,6 +27,9 @@ type crewEditor struct {
 	items, outfits                          []string
 	direction                               int
 	dirty                                   bool
+	copySources                             []ship.RoomCrewSource
+	copyVariant, copyJob                    int
+	copyOpen                                bool
 	contents                                int // 0 equipment, 1 backpack, 2 belt
 }
 
@@ -61,14 +64,14 @@ func (ws *WsShip) switchCrewTheme(index int) {
 	if index < 0 || index >= len(ws.project.Hull.Themes) || index == ws.theme || !ws.commitCrew() {
 		return
 	}
-	scope := ws.crew.scope
+	moduleID, _ := ship.RoomCrewIDs(ws.crew.scope)
 	ws.switchTheme(index)
 	ws.crew.scopes = ws.project.CrewScopesForTheme(ws.currentTheme())
 	// Keep a room roster only if that option is available in the new variant.
 	// Otherwise select the variant's own crew, never an invisible room.
 	for _, s := range ws.crew.scopes {
-		if s.ID == scope && strings.HasPrefix(scope, "module/") {
-			ws.loadCrewScope(scope)
+		if module, _ := ship.RoomCrewIDs(s.ID); moduleID != "" && module == moduleID {
+			ws.loadCrewScope(s.ID)
 			return
 		}
 	}
@@ -76,13 +79,17 @@ func (ws *WsShip) switchCrewTheme(index int) {
 }
 
 func (ws *WsShip) loadCrewScope(scope string) {
+	moduleID, roomTheme := ship.RoomCrewIDs(scope)
 	// Context menus, undo and recovery can target a variant other than the
 	// one currently displayed. Keep the selector and its room list in sync.
 	if strings.HasPrefix(scope, "theme/") {
 		if index := ws.themeIndexByID(strings.TrimPrefix(scope, "theme/")); index >= 0 {
 			ws.switchTheme(index)
 		}
-	} else if m, ok := ws.module(strings.TrimPrefix(scope, "module/")); strings.HasPrefix(scope, "module/") && ok {
+	} else if m, ok := ws.module(moduleID); moduleID != "" && ok {
+		if index := ws.themeIndexByID(roomTheme); roomTheme != "" && index >= 0 {
+			ws.switchTheme(index)
+		}
 		theme := ws.currentTheme()
 		if !m.Available(theme.ID) || !ship.Contains(ws.project.Hull.SlotsFor(theme), m.Slot) {
 			for i, candidate := range ws.project.Hull.Themes {
@@ -92,6 +99,7 @@ func (ws *WsShip) loadCrewScope(scope string) {
 				}
 			}
 		}
+		scope = ws.project.RoomCrewScope(moduleID, ws.currentTheme().ID)
 	}
 	ws.crew.scopes = ws.project.CrewScopesForTheme(ws.currentTheme())
 	jobs, err := ws.project.CrewJobs(scope)
@@ -100,11 +108,19 @@ func (ws *WsShip) loadCrewScope(scope string) {
 		return
 	}
 	ws.crew.scope, ws.crew.jobs, ws.crew.selected, ws.crew.dirty = scope, jobs, -1, false
+	ws.crew.copySources, ws.crew.copyOpen = nil, false
+	ws.crew.copyVariant, ws.crew.copyJob = 0, 0
+	if moduleID != "" {
+		ws.crew.copySources, err = ws.project.RoomCrewSources(moduleID, ws.currentTheme().ID)
+	}
 	if len(jobs) > 0 {
 		ws.crew.selected = 0
 	}
 	ws.armCrewPicker()
 	ws.crew.error = ""
+	if err != nil {
+		ws.crew.error = err.Error()
+	}
 }
 func (ws *WsShip) armCrewPicker() {
 	ws.crew.lastPrefab = ""
@@ -180,19 +196,8 @@ func (ws *WsShip) crewControls() {
 		hint("An empty variant roster uses the ship's crew.")
 	}
 	if strings.HasPrefix(c.scope, "module/") {
-		hint("These slots are added when this room option is installed.")
-		if m, ok := ws.module(strings.TrimPrefix(c.scope, "module/")); ok {
-			var variants []string
-			for _, theme := range ws.project.Hull.Themes {
-				if m.Available(theme.ID) && ship.Contains(ws.project.Hull.SlotsFor(theme), m.Slot) {
-					variants = append(variants, theme.Name)
-				}
-			}
-			if len(variants) > 1 {
-				hint("This room's crew is shared across variants.")
-				tooltip(strings.Join(variants, ", "))
-			}
-		}
+		hint("These jobs belong to this room option in " + ws.currentTheme().Name + ".")
+		ws.roomCrewCopyControls()
 	}
 	space()
 	total := 0
@@ -538,14 +543,25 @@ func (ws *WsShip) crewDetails() {
 	}
 	tooltip("Extra items placed inside the backpack or belt.")
 	space()
-	if c.dirty {
-		if actionButton("Apply changes", true) {
-			ws.commitCrew()
-		}
-		if actionButton("Discard unfinished changes", false) {
-			ws.loadCrewScope(c.scope)
-		}
+	ws.crewJobActions()
+}
+
+func (ws *WsShip) crewJobActions() {
+	c := &ws.crew
+	// A field can auto-save on mouse-down. Keep these rows in place so Delete
+	// cannot move underneath a click aimed at Apply or Discard.
+	imgui.BeginDisabledV(!c.dirty)
+	if actionButton("Apply changes", true) {
+		ws.commitCrew()
 	}
+	if actionButton("Discard unfinished changes", false) {
+		ws.loadCrewScope(c.scope)
+	}
+	imgui.EndDisabled()
+	if c.selected < 0 || c.selected >= len(c.jobs) {
+		return
+	}
+	j := &c.jobs[c.selected]
 	space()
 	imgui.PushStyleColor(imgui.StyleColorText, style.Danger)
 	deleting := actionButton("Delete job...", false)

@@ -45,6 +45,9 @@ func exerciseVariantCrew(t *testing.T, ws *WsShip, render func()) {
 	ws.beginCrew()
 	checkScope := func(scope string, present bool) {
 		t.Helper()
+		if module, _ := ship.RoomCrewIDs(scope); module != "" {
+			scope = p.RoomCrewScope(module, ws.currentTheme().ID)
+		}
 		found := false
 		for _, s := range ws.crew.scopes {
 			found = found || s.ID == scope
@@ -77,7 +80,7 @@ func exerciseVariantCrew(t *testing.T, ws *WsShip, render func()) {
 		t.Fatal(ws.crew.error)
 	}
 	ws.app.CommandStorage().Undo()
-	if ws.theme != 1 || ws.crew.scope != "module/variant_engineering" || len(ws.crew.jobs) != 0 {
+	if ws.theme != 1 || ws.crew.scope != p.RoomCrewScope("variant_engineering", second.ID) || len(ws.crew.jobs) != 0 {
 		t.Fatal("undo restored the wrong variant or room roster")
 	}
 	ws.app.CommandStorage().Redo()
@@ -97,10 +100,41 @@ func exerciseVariantCrew(t *testing.T, ws *WsShip, render func()) {
 		t.Fatal(ws.crew.error)
 	}
 	ws.loadCrewScope("module/cargo_basic")
-	setJob("Shared quartermaster")
+	setJob("Second quartermaster")
 	ws.switchCrewTheme(0)
-	if ws.crew.scope != "module/cargo_basic" || ws.crew.jobs[0].Name != "Shared quartermaster" {
-		t.Fatal("switching variants lost the shared room roster")
+	if ws.crew.scope != p.RoomCrewScope("cargo_basic", first.ID) || len(ws.crew.jobs) != 0 {
+		t.Fatal("a different variant inherited this room's new job")
+	}
+	if len(ws.crew.copySources) != 1 || ws.crew.copySources[0].Theme.ID != second.ID {
+		t.Fatal("copy control did not offer the configured variant")
+	}
+	ws.crew.copyOpen = true
+	for i := 0; i < 3; i++ {
+		render()
+	}
+	if dst := os.Getenv("SHIP_RENDER_TEST_OUTPUT"); dst != "" {
+		name := "copy-room-job.png"
+		if p.Settings == nil {
+			name = "copy-room-job-loaded.png"
+		}
+		captureFrame(t, filepath.Join(dst, name), 1400, 960)
+	}
+	ws.crew.copyOpen = false
+	render()
+	if !ws.copyRoomCrewJob(second.ID, 0) || len(ws.crew.jobs) != 1 || ws.crew.jobs[0].Name != "Second quartermaster" {
+		t.Fatal("copying the selected job failed", ws.crew.error)
+	}
+	ws.app.CommandStorage().Undo()
+	if len(ws.crew.jobs) != 0 || ws.theme != 0 {
+		t.Fatal("undo did not remove the copied job from only its target variant")
+	}
+	ws.app.CommandStorage().Redo()
+	if len(ws.crew.jobs) != 1 {
+		t.Fatal("redo did not restore the copied job")
+	}
+	setJob("First quartermaster")
+	if !ws.commitCrew() {
+		t.Fatal(ws.crew.error)
 	}
 	ws.crew.jobs[0].Name, ws.crew.dirty = "", true
 	ws.switchCrewTheme(1)
@@ -112,7 +146,7 @@ func exerciseVariantCrew(t *testing.T, ws *WsShip, render func()) {
 		t.Fatal(err)
 	}
 	var recovery recoveryWorkspace
-	if err = json.Unmarshal(data, &recovery); err != nil || recovery.Theme != 0 || recovery.Form.CrewScope != "module/cargo_basic" || !recovery.Form.CrewDirty {
+	if err = json.Unmarshal(data, &recovery); err != nil || recovery.Theme != 0 || recovery.Form.CrewScope != p.RoomCrewScope("cargo_basic", first.ID) || !recovery.Form.CrewDirty {
 		t.Fatal("recovery lost the variant or unfinished room roster", err)
 	}
 	ws.loadCrewScope("module/cargo_basic") // Discard the unfinished form.
@@ -142,8 +176,8 @@ func exerciseVariantCrew(t *testing.T, ws *WsShip, render func()) {
 	}
 	for scope, name := range map[string]string{
 		"theme/" + first.ID: "First captain", "theme/" + second.ID: "Second captain",
-		"module/medical": "Medical technician", "module/variant_engineering": "Variant engineer",
-		"module/cargo_basic": "Shared quartermaster",
+		p.RoomCrewScope("medical", first.ID): "Medical technician", p.RoomCrewScope("variant_engineering", second.ID): "Variant engineer",
+		p.RoomCrewScope("cargo_basic", first.ID): "First quartermaster", p.RoomCrewScope("cargo_basic", second.ID): "Second quartermaster",
 	} {
 		jobs, err := reopened.CrewJobs(scope)
 		if err != nil || len(jobs) != 1 || jobs[0].Name != name {

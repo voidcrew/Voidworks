@@ -213,7 +213,8 @@ func (ws *WsShip) variantsControls() {
 	}
 	for i, t := range h.Themes {
 		active := i == ws.theme
-		info, err := ws.variant(t, active)
+		expanded := active && ws.variantExpanded(t.ID)
+		info, err := ws.variant(t, expanded)
 		detail := err
 		if err == "" {
 			detail = themeDetail(info)
@@ -222,14 +223,15 @@ func (ws *WsShip) variantsControls() {
 		if active {
 			badge = "editing"
 		}
-		if workshop.Row("variant-"+t.ID, t.Name, detail, badge, active, style.Violet, 0) && !active {
-			ws.switchTheme(i)
+		if workshop.Row("variant-"+t.ID, t.Name, detail, badge, active, style.Violet, 18) {
+			ws.clickVariantHeading(i)
 		}
+		roomDisclosureArrow(expanded)
 		if imgui.BeginPopupContextItemV("variant-menu-"+t.ID, 1) {
 			ws.variantMenu(t)
 			imgui.EndPopup()
 		}
-		if active && err == "" {
+		if expanded && err == "" {
 			ws.variantRooms(info)
 		}
 	}
@@ -237,6 +239,24 @@ func (ws *WsShip) variantsControls() {
 		ws.beginTask(taskTheme)
 	}
 	tooltip("Variants are alternate hulls of this ship with their own rooms, crew and price.")
+}
+
+func (ws *WsShip) variantExpanded(id string) bool {
+	return !ws.collapsedSections[roomSection{hull: ws.project.Hull.Type, theme: id, variants: true}]
+}
+
+func (ws *WsShip) clickVariantHeading(index int) {
+	if index < 0 || index >= len(ws.project.Hull.Themes) {
+		return
+	}
+	id := ws.project.Hull.Themes[index].ID
+	section := roomSection{hull: ws.project.Hull.Type, theme: id, variants: true}
+	if index == ws.theme {
+		ws.setRoomCollapsed(section, ws.variantExpanded(id))
+	} else {
+		ws.switchTheme(index)
+		ws.setRoomCollapsed(section, false)
+	}
 }
 
 // variantRooms lists the open variant's rooms with independently collapsible

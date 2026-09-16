@@ -309,6 +309,7 @@ func (p *Project) dropModule(i int) error {
 	}
 	if p.Crew != nil {
 		delete(p.Crew.Rosters, "module/"+m.ID)
+		delete(p.Crew.ModuleThemes, m.ID)
 	}
 	delete(p.partCosts, "module/"+m.ID)
 	p.Hull.Modules = append(p.Hull.Modules[:i], p.Hull.Modules[i+1:]...)

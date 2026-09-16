@@ -4,12 +4,79 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
+	"github.com/SpaiR/imgui-go"
 	"sdmm/internal/dmapi/dmenv"
 	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/ship"
 )
+
+func TestCrewApplyDoesNotTurnIntoDeleteOnAutoSave(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	ctx := imgui.CreateContext(nil)
+	defer ctx.Destroy()
+	io := imgui.CurrentIO()
+	io.SetIniFilename("")
+	io.SetDisplaySize(imgui.Vec2{X: 600, Y: 500})
+	io.SetDeltaTime(1.0 / 60)
+	io.Fonts().TextureDataRGBA32()
+	ws := &WsShip{crew: crewEditor{jobs: []ship.CrewJob{{Name: "Engineer", Slots: 2}}, selected: 0, dirty: true}}
+	var apply, last imgui.Vec2
+	var deleting bool
+	frame := func() {
+		imgui.NewFrame()
+		imgui.SetNextWindowPos(imgui.Vec2{})
+		imgui.SetNextWindowSize(imgui.Vec2{X: 600, Y: 500})
+		imgui.BeginV("Crew actions regression", nil, imgui.WindowFlagsNoSavedSettings)
+		apply = imgui.CursorScreenPos().Plus(imgui.Vec2{X: 100, Y: 18})
+		ws.crewJobActions()
+		lo, hi := imgui.ItemRectMin(), imgui.ItemRectMax()
+		last = imgui.Vec2{X: (lo.X + hi.X) / 2, Y: (lo.Y + hi.Y) / 2}
+		deleting = imgui.IsPopupOpen("Delete crew job")
+		imgui.End()
+		imgui.Render()
+	}
+	click := func(pos imgui.Vec2) {
+		io.SetMousePosition(pos)
+		frame()
+		io.SetMouseButtonDown(0, true)
+		frame()
+		io.SetMouseButtonDown(0, false)
+		frame()
+	}
+	for i := 0; i < 3; i++ {
+		frame()
+	}
+	deleteBefore := last
+	io.SetMousePosition(apply)
+	frame()
+	// Leaving an edited field saves it on mouse-down, before drawing Apply.
+	io.SetMouseButtonDown(0, true)
+	ws.crew.dirty = false
+	frame()
+	io.SetMouseButtonDown(0, false)
+	frame()
+	if deleting || len(ws.crew.jobs) != 1 {
+		t.Fatal("clicking Apply after auto-save triggered job deletion")
+	}
+	if last != deleteBefore {
+		t.Fatal("auto-save moved the Delete control")
+	}
+	click(apply) // A second click at the same location is also harmless.
+	if deleting {
+		t.Fatal("a repeated Apply click opened Delete")
+	}
+	click(last)
+	if !deleting {
+		t.Fatal("the actual Delete button no longer opens its confirmation")
+	}
+	if len(ws.crew.jobs) != 1 {
+		t.Fatal("opening the confirmation removed the job")
+	}
+}
 
 func exerciseCrew(t *testing.T, ws *WsShip, render func(), legacy bool) {
 	t.Helper()

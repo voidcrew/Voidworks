@@ -447,3 +447,71 @@ func TestVariantRoomCollapsePreservesConfiguration(t *testing.T) {
 		t.Fatalf("disclosure changed the ship configuration: %s (%v)", after, err)
 	}
 }
+
+func TestVariantHeadingCollapsesWholeBox(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	ctx := imgui.CreateContext(nil)
+	defer ctx.Destroy()
+	io := imgui.CurrentIO()
+	io.SetIniFilename("")
+	io.SetDisplaySize(imgui.Vec2{X: 450, Y: 700})
+	io.SetDeltaTime(1.0 / 60)
+	io.Fonts().TextureDataRGBA32()
+	ws := &WsShip{
+		project:  &ship.Project{Hull: ship.Hull{Type: "/datum/map_template/shuttle/test", Slots: []string{"cargo"}, Themes: []ship.Theme{{ID: "standard", Name: "Standard"}, {ID: "other", Name: "Other"}}}},
+		selected: map[string]string{"cargo": "cargo_basic"},
+		variantInfos: map[string]variantInfo{
+			"standard": {full: true, info: ship.ThemeInfo{ID: "standard", Name: "Standard", Slots: []string{"cargo"}}},
+			"other":    {full: true, info: ship.ThemeInfo{ID: "other", Name: "Other", Slots: []string{"cargo"}}},
+		},
+	}
+	before, _ := json.Marshal(ws.project.Hull)
+	var heading imgui.Vec2
+	host := "Variant box regression"
+	frame := func() float32 {
+		imgui.NewFrame()
+		imgui.SetNextWindowPos(imgui.Vec2{})
+		imgui.SetNextWindowSize(imgui.Vec2{X: 450, Y: 700})
+		imgui.BeginV(host, nil, imgui.WindowFlagsNoSavedSettings)
+		start := imgui.CursorScreenPos()
+		heading = start.Plus(imgui.Vec2{X: 150, Y: 50})
+		ws.variantsControls()
+		height := imgui.CursorScreenPos().Y - start.Y
+		imgui.End()
+		imgui.Render()
+		return height
+	}
+	click := func() float32 {
+		io.SetMousePosition(heading)
+		frame()
+		io.SetMouseButtonDown(0, true)
+		frame()
+		io.SetMouseButtonDown(0, false)
+		frame()
+		return frame()
+	}
+	frame()
+	expanded := frame()
+	collapsed := click()
+	if collapsed >= expanded || ws.variantExpanded("standard") || ws.theme != 0 {
+		t.Fatal("clicking the variant box did not collapse its rooms")
+	}
+	ws.theme = 1
+	if frame() != expanded || !ws.variantExpanded("other") {
+		t.Fatal("collapsing one variant collapsed another")
+	}
+	ws.theme = 0
+	host = "Reopened variant box"
+	frame()
+	if frame() != collapsed {
+		t.Fatal("returning to the variant lost its collapsed state")
+	}
+	if click() != expanded {
+		t.Fatal("clicking the variant again did not expand it")
+	}
+	after, _ := json.Marshal(ws.project.Hull)
+	if string(before) != string(after) || ws.selected["cargo"] != "cargo_basic" {
+		t.Fatal("collapsing a variant changed the ship configuration")
+	}
+}
