@@ -748,7 +748,7 @@ func (ws *WsShip) settingsControls() {
 		hint("Crew capacity is set by the slots in Crew & equipment.")
 	}
 	imgui.Checkbox("Hide from the player ship list", &s.hidden)
-	hint("Keep this checked while your ship is a work in progress.")
+	hint("Check this to hide an unfinished ship.")
 	nameErr := ship.ShipNameError(ws.catalog, ws.app.LoadedEnvironment(), s.name, ws.project.Hull.Type)
 	costErr := s.costs.Validate()
 	valid := nameErr == nil && costErr == nil && s.crew >= 1 && s.crew <= 32

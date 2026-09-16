@@ -405,7 +405,7 @@ func NewProject(c *Catalog, dme *dmenv.Dme, id, name string, width, height int) 
 			return nil, fmt.Errorf("ship ID already open: %s", id)
 		}
 	}
-	p := &Project{Catalog: c, Dme: dme, Hull: h, Settings: &Settings{Version: 1, ID: id, Crew: 4, Hidden: true, PortDirection: 2}, Documents: map[string]*Document{}, files: map[string]FileChange{}}
+	p := &Project{Catalog: c, Dme: dme, Hull: h, Settings: &Settings{Version: 1, ID: id, Crew: 4, Hidden: false, PortDirection: 2}, Documents: map[string]*Document{}, files: map[string]FileChange{}}
 	for _, file := range p.outputPaths() {
 		if file == dme.RootFile {
 			continue
