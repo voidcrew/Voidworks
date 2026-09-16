@@ -1,3 +1,11 @@
+# Voidworks 0.5.16
+
+* Ship Workshop now offers editable room shapes, room options and variants, including shared or independent room files, prices and crew rosters. Room and variant headings can be renamed and collapsed.
+* Ship edits are recovered after a crash. Saved ships reopen with refreshed source data, and unknown map types remain preserved.
+* Fixed workshop visibility exceptions, repeated room-status checks, confirmation dialogs, job-copy actions and clothing previews.
+* Successful purchase-preview generation backs up known obsolete images outside the game checkout. Help > Ship Purchase Previews > Review unused previews offers selective cleanup of older leftovers, with recovery copies and failure rollback.
+* A startup notice explains when updated Voidcrew game code is needed for independent variant crew. The editor package does not update the game checkout.
+
 # Voidworks 0.5.16-beta.2
 
 * Ship Workshop: a Variants list beside Rooms. Each variant shows its default flag, rooms, price and crew; open one to enable or disable rooms for it and to see, per option, whether it uses the shared room file or its own copy. Make an option variant-specific or send it back to the shared room, rename and describe a variant, set its price and crew, make it the default or delete it. Everything is undoable.
