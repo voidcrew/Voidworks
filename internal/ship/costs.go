@@ -194,6 +194,32 @@ func (p *Project) costBytes() []byte {
 	return data
 }
 
+// DisplayPartCosts uses the loaded definitions for informational labels. Reading
+// a label must not walk the entire source tree; PartCosts and SetPartCosts still
+// inspect the current source before a price is edited.
+func (p *Project) DisplayPartCosts(id string) (PartCosts, error) {
+	s, err := p.costScope(id)
+	if err != nil {
+		return nil, err
+	}
+	if cost, ok := p.partCosts[id]; ok {
+		return clonePartCosts(cost), cost.Validate()
+	}
+	if p.Settings != nil {
+		if id == "ship" {
+			return PartCosts{"misc": p.Settings.Cost}, nil
+		}
+		return PartCosts{}, nil
+	}
+	if original, ok := p.costOriginal[id]; ok {
+		return clonePartCosts(original.value), nil
+	}
+	if object := p.Dme.Objects[s.Type]; object != nil {
+		return parsePartCosts(object.Vars.ValueV(s.Field, "null"))
+	}
+	return PartCosts{}, nil
+}
+
 func (p *Project) PartCosts(id string) (PartCosts, error) {
 	s, err := p.costScope(id)
 	if err != nil {

@@ -36,6 +36,32 @@ func TestPartCostsParsingAndValidation(t *testing.T) {
 	}
 }
 
+func TestDisplayCostsDoNotReadProjectSources(t *testing.T) {
+	p, _ := loadedRoomProject(t, true)
+	vars := dmvars.MutableVariables{}
+	vars.Put("part_requirements", `list("combat" = 2, "trade" = 7)`)
+	p.Dme.Objects[p.Hull.Type].Vars = vars.ToImmutable()
+	// Labels must still render from the loaded environment when source files
+	// are unavailable. The price editor must continue to report that problem.
+	p.Dme.RootFile = filepath.Join(t.TempDir(), "unavailable.dme")
+	cost, err := p.DisplayPartCosts("ship")
+	if err != nil || !cost.Equal(PartCosts{"combat": 2, "trade": 7}) {
+		t.Fatal("display price unavailable", cost, err)
+	}
+	if _, err = p.PartCosts("ship"); err == nil {
+		t.Fatal("price editor skipped its source checks")
+	}
+	p.partCosts = map[string]PartCosts{"ship": {"science": 13}}
+	cost, err = p.DisplayPartCosts("ship")
+	if err != nil || !cost.Equal(PartCosts{"science": 13}) {
+		t.Fatal("display did not reflect unsaved price", cost, err)
+	}
+	cost["science"] = 99
+	if p.partCosts["ship"]["science"] != 13 {
+		t.Fatal("display price aliases editable settings")
+	}
+}
+
 func TestAuthoredCostsLegacyMigrationRoundTripAndUndo(t *testing.T) {
 	c, dme := authorEnvironment(t)
 	p, err := NewProject(c, dme, "priced", "Priced", 16, 16)

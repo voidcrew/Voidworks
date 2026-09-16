@@ -37,7 +37,7 @@ func (t *TileMenu) Process() {
 
 func (t *TileMenu) showControls() {
 	w.Layout{
-		w.MenuItem(t.tile.Coord.String(), nil).Icon(icon.Help).Enabled(false),
+		w.MenuItem(t.contents.Coord.String(), nil).Icon(icon.Help).Enabled(false),
 		w.Separator(),
 		w.MenuItem("Undo", t.app.DoUndo).
 			Icon(icon.Undo).
@@ -63,14 +63,15 @@ func (t *TileMenu) showControls() {
 			Shortcut("Delete"),
 		w.Separator(),
 		w.Custom(func() {
-			for idx, instance := range t.tile.Instances().Sorted() {
-				t.showInstance(instance, idx)
+			for idx, entry := range t.contents.Entries {
+				t.showInstance(entry, idx)
 			}
 		}),
 	}.Build()
 }
 
-func (t *TileMenu) showInstance(i *dmminstance.Instance, idx int) {
+func (t *TileMenu) showInstance(entry Entry, idx int) {
+	i := entry.Instance
 	p := i.Prefab()
 	s := getSprite(p)
 	iconSize := t.iconSize()
@@ -78,7 +79,7 @@ func (t *TileMenu) showInstance(i *dmminstance.Instance, idx int) {
 	name := fmt.Sprintf("%s##prefab_row_%d", p.Vars().TextV("name", ""), idx)
 
 	w.Layout{
-		w.Menu(name, t.showInstanceControls(i, idx)).
+		w.Menu(name, t.showInstanceControls(entry, idx)).
 			IconEmpty(),
 		w.Custom(func() {
 			// Draw the instance icon.
@@ -95,10 +96,22 @@ func (t *TileMenu) showInstance(i *dmminstance.Instance, idx int) {
 	}.Build()
 }
 
-func (t *TileMenu) showInstanceControls(i *dmminstance.Instance, idx int) w.Layout {
+func (t *TileMenu) showInstanceControls(entry Entry, idx int) w.Layout {
+	i := entry.Instance
 	p := i.Prefab()
 
-	return w.Layout{
+	controls := w.Layout{}
+	if !entry.Editable {
+		if entry.EditSource != nil {
+			controls = append(controls, w.MenuItem("Edit in "+entry.Source, entry.EditSource).Icon(icon.EyeDropper))
+		}
+		return append(controls,
+			w.Separator(),
+			w.MenuItem("Search by Type", t.doSearchByType(i)).Icon(icon.Search),
+			w.MenuItem("Search by Prefab ID", t.doSearchByPrefabID(i)).Icon(icon.Search),
+		)
+	}
+	return append(controls, w.Layout{
 		w.Custom(func() {
 			if t.app.Prefs().Controls.QuickEditContextMenu {
 				t.pQuickEdit.ProcessV(i)
@@ -133,7 +146,7 @@ func (t *TileMenu) showInstanceControls(i *dmminstance.Instance, idx int) w.Layo
 			Icon(icon.Search),
 		w.MenuItem(fmt.Sprint("Search by Prefab ID##search_by_prefab_id_", idx), t.doSearchByPrefabID(i)).
 			Icon(icon.Search),
-	}
+	}...)
 }
 
 func (t *TileMenu) doMoveToTop(i *dmminstance.Instance) func() {

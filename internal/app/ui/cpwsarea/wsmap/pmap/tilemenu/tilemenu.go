@@ -64,9 +64,23 @@ type TileMenu struct {
 
 	opened bool
 
-	tile *dmmap.Tile
+	contents Contents
 
 	pQuickEdit *pquickedit.Panel
+}
+
+// Contents describes the displayed tile. Editable entries must point to live
+// source instances, never copies projected into a workshop preview.
+type Contents struct {
+	Coord   util.Point
+	Entries []Entry
+}
+
+type Entry struct {
+	Instance   *dmminstance.Instance
+	Editable   bool
+	Source     string
+	EditSource func()
 }
 
 func New(app App, editor editor) *TileMenu {
@@ -80,9 +94,9 @@ func (t *TileMenu) Dispose() {
 	t.shortcuts.Dispose()
 }
 
-func (t *TileMenu) Open(coord util.Point) {
-	if t.editor.Dmm().HasTile(coord) {
-		t.tile = t.editor.Dmm().GetTile(coord)
+func (t *TileMenu) Open(contents Contents) {
+	if len(contents.Entries) > 0 {
+		t.contents = contents
 		t.opened = true
 		imgui.OpenPopup("tileMenu")
 	}
@@ -90,5 +104,5 @@ func (t *TileMenu) Open(coord util.Point) {
 
 func (t *TileMenu) close() {
 	t.opened = false
-	t.tile = nil
+	t.contents = Contents{}
 }

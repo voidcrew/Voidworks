@@ -2,6 +2,7 @@ package wsship
 
 import (
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"path/filepath"
 	"sdmm/internal/app/command"
 	"sdmm/internal/app/ui/cpwsarea/workspace"
@@ -69,6 +70,8 @@ type WsShip struct {
 }
 
 func New(app App, busy ...func(string) bool) *WsShip {
+	started := time.Now()
+	defer func() { log.Debug().Dur("duration_ms", time.Since(started)).Msg("ship library loaded") }()
 	ws := &WsShip{app: app, projects: map[string]*ship.Project{}, panes: map[string]*pmap.PaneMap{}, width: 32, height: 32, sizePreset: 1}
 	if len(busy) > 0 {
 		ws.SourceBusy = busy[0]
@@ -223,6 +226,11 @@ func (ws *WsShip) rebuild() {
 		return
 	}
 	h := ws.catalog.Hulls[ws.hull]
+	started := time.Now()
+	log.Debug().Str("ship", h.Name).Msg("opening ship assembly")
+	defer func() {
+		log.Debug().Str("ship", h.Name).Dur("duration_ms", time.Since(started)).Msg("ship assembly finished")
+	}()
 	p := ws.projects[h.Type]
 	if p == nil {
 		var err error
@@ -318,7 +326,7 @@ func (ws *WsShip) rebuild() {
 			ws.source = index
 			ws.rebuild()
 			ws.OnFocusChange(true)
-		}, Filter: ws.visible, Overlay: ws.paintRooms})
+		}, Filter: ws.visible, Overlay: ws.paintRooms, Inspect: ws.inspectInstance})
 	}
 	ws.activate(ws.panes[a.Sources[ws.source].File])
 	ws.pane.RenderContext()

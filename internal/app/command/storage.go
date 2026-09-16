@@ -64,6 +64,7 @@ func (s *Storage) PushV(id string, command Command) {
 	if stack, ok := s.commandStacks[id]; ok {
 		logStackAction(stack, "push command: "+command.name)
 		stack.undo = append(stack.undo, command)
+		clear(stack.redo)
 		stack.redo = stack.redo[:0]
 		stack.balance++
 	} else {

@@ -45,7 +45,7 @@ func InitImGuiGLFW() {
 	io := imgui.CurrentIO()
 
 	io.SetClipboard(c)
-	io.SetBackendFlags(imgui.BackendFlagsHasMouseCursors | imgui.BackendFlagsHasSetMousePos)
+	io.SetBackendFlags(io.GetBackendFlags() | imgui.BackendFlagsHasMouseCursors | imgui.BackendFlagsHasSetMousePos)
 
 	log.Print("clipboard initialized")
 

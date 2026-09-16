@@ -69,9 +69,23 @@ func TestRenderWithStackRelocation(t *testing.T) {
 		imgui.BeginChildV("clipped", imgui.Vec2{X: 180, Y: 80}, true, 0)
 		imgui.Button("A second draw command")
 		imgui.EndChild()
+		if frame == 0 {
+			draw := imgui.WindowDrawList()
+			for range 20000 {
+				draw.AddRectFilled(imgui.Vec2{X: 20, Y: 130}, imgui.Vec2{X: 22, Y: 132}, imgui.PackedColor(0xffffffff))
+			}
+			draw.AddRectFilled(imgui.Vec2{X: 200, Y: 150}, imgui.Vec2{X: 220, Y: 170}, imgui.PackedColorFromVec4(imgui.Vec4{Y: 1, W: 1}))
+		}
 		imgui.End()
 		imgui.Render()
 		Render(imgui.RenderedDrawData())
+		if frame == 0 {
+			var pixel [4]byte
+			gl.ReadPixels(210, 240-160, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(&pixel[0]))
+			if pixel[0] != 0 || pixel[1] != 255 || pixel[2] != 0 {
+				t.Fatalf("geometry beyond 65536 vertices was not rendered: %v", pixel)
+			}
+		}
 		if code := gl.GetError(); code != gl.NO_ERROR {
 			t.Fatalf("frame %d: GL error %#x", frame, code)
 		}

@@ -2,6 +2,7 @@ package pmap
 
 import (
 	"sdmm/internal/app/ui/cpwsarea/wsmap/pmap/canvas"
+	"sdmm/internal/app/ui/cpwsarea/wsmap/pmap/tilemenu"
 	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/dmapi/dmmap/dmminstance"
 	"sdmm/internal/util"
@@ -17,6 +18,8 @@ type EditContext struct {
 	BeforeHistory func()
 	Filter        func(string) bool
 	Editable      map[uint64]*dmminstance.Instance
+	// Inspect locates the owner of a displayed instance outside this source.
+	Inspect func(*dmminstance.Instance) (string, func())
 	// Overlay draws the owner's own shapes each frame in view coordinates.
 	Overlay func(OverlayPainter)
 }
@@ -90,6 +93,32 @@ func (p *PaneMap) MapToView(coord util.Point) util.Point {
 		coord.Y += p.context.Offset.Y
 	}
 	return coord
+}
+
+// TileMenuContents uses the same assembled tile as the renderer, including
+// tiles outside the active room. Map tools still use the source's own bounds.
+func (p *PaneMap) TileMenuContents(coord util.Point) tilemenu.Contents {
+	coord = p.MapToView(coord)
+	contents := tilemenu.Contents{Coord: coord}
+	view := p.ViewDmm()
+	if !view.HasTile(coord) {
+		return contents
+	}
+	for _, instance := range view.GetTile(coord).Instances().Sorted() {
+		entry := tilemenu.Entry{Instance: instance, Editable: true}
+		if p.context != nil && view != p.dmm {
+			if source := p.context.Editable[instance.Id()]; source != nil {
+				entry.Instance = source
+			} else {
+				entry.Editable = false
+				if p.context.Inspect != nil {
+					entry.Source, entry.EditSource = p.context.Inspect(instance)
+				}
+			}
+		}
+		contents.Entries = append(contents.Entries, entry)
+	}
+	return contents
 }
 
 func (p *PaneMap) Refresh(coords []util.Point) {

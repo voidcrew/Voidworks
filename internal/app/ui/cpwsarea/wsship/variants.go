@@ -50,7 +50,7 @@ func (ws *WsShip) variant(t ship.Theme, full bool) (ship.ThemeInfo, string) {
 // variantOverview is the summary a closed row needs: no map comparisons.
 func (ws *WsShip) variantOverview(t ship.Theme) (ship.ThemeInfo, string) {
 	info := ship.ThemeInfo{ID: t.ID, Name: t.Name, Default: t.Default, Slots: ws.project.Hull.SlotsFor(t), Inherited: t.Slots == nil}
-	cost, err := ws.project.PartCosts("theme/" + t.ID)
+	cost, err := ws.project.DisplayPartCosts("theme/" + t.ID)
 	if err != nil {
 		return info, err.Error()
 	}

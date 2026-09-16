@@ -295,10 +295,10 @@ func (p *PaneMap) mouseChangeCallback(x, y uint) {
 }
 
 func (p *PaneMap) openTileMenu() {
-	if !p.canvasState.HoverOutOfBounds() {
-		log.Print("open tile menu:", p.canvasState.HoveredTile())
-		p.tileMenu.Open(p.canvasState.HoveredTile())
-	}
+	mouse := imgui.MousePos()
+	p.updateCanvasMousePosition(int(mouse.X), int(mouse.Y))
+	log.Print("open tile menu:", p.canvasState.HoveredTile())
+	p.tileMenu.Open(p.TileMenuContents(p.canvasState.HoveredTile()))
 }
 
 func (p *PaneMap) processCanvasHoveredInstance() {
