@@ -6,6 +6,7 @@ var commandCounter uint64 = 0
 type Command struct {
 	id   uint64
 	name string
+	cost int64
 
 	undo, redo func()
 }
@@ -24,11 +25,14 @@ func (c Command) ReadableName() string {
 	return c.name
 }
 
+func (c Command) WithCost(bytes int64) Command { c.cost = bytes; return c }
+
 func (c Command) Run() Command {
 	c.undo()
 	return Command{
 		id:   c.id,
 		name: c.name,
+		cost: c.cost,
 		undo: c.redo,
 		redo: c.undo,
 	}

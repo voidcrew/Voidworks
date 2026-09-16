@@ -7,6 +7,7 @@ import (
 	"sdmm/internal/app/ui/layout/lnode"
 	"sdmm/internal/dmapi/dm"
 	"sdmm/internal/dmapi/dmmap"
+	"sdmm/internal/dmapi/dmmap/dmmdata/dmmprefab"
 	"sdmm/internal/dmapi/dmvars"
 	"sdmm/internal/imguiext/icon"
 	w "sdmm/internal/imguiext/widget"
@@ -19,6 +20,11 @@ import (
 func (p *Prefabs) showContextMenu(node *prefabNode) {
 	if imgui.BeginPopupContextItemV(fmt.Sprintf("context_menu_%d", node.orig.Id()), imgui.PopupFlagsMouseButtonRight) {
 		w.Layout{
+			w.Custom(func() {
+				if app, ok := p.app.(interface{ DoEditSprite(*dmmprefab.Prefab) }); ok {
+					w.MenuItem("Edit sprite", func() { app.DoEditSprite(node.orig) }).IconEmpty().Build()
+				}
+			}),
 			w.MenuItem("Search by Type", p.doSearchByTypeOnMap(node)).
 				Icon(icon.Search).
 				Enabled(p.app.HasActiveMap()),

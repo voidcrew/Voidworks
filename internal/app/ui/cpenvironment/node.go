@@ -11,15 +11,22 @@ import (
 )
 
 type treeNode struct {
-	name   string
-	orig   *dmenv.Object
-	sprite *dmicon.Sprite
-	color  imgui.Vec4
-	dir    int
+	name         string
+	orig         *dmenv.Object
+	sprite       *dmicon.Sprite
+	color        imgui.Vec4
+	dir          int
+	iconRevision uint64
 }
 
 func (e *Environment) newTreeNode(object *dmenv.Object) (*treeNode, bool) {
 	if node, ok := e.treeNodes[object.Path]; ok {
+		if node.iconRevision != dmicon.LayoutRevision {
+			icon, _ := object.Vars.Text("icon")
+			state, _ := object.Vars.Text("icon_state")
+			node.sprite = dmicon.Cache.GetSpriteOrPlaceholderV(icon, state, node.dir)
+			node.iconRevision = dmicon.LayoutRevision
+		}
 		return node, true
 	}
 
@@ -40,11 +47,12 @@ func (e *Environment) newTreeNode(object *dmenv.Object) (*treeNode, bool) {
 	}
 
 	node := &treeNode{
-		name:   object.Path[strings.LastIndex(object.Path, "/")+1:],
-		orig:   object,
-		sprite: dmicon.Cache.GetSpriteOrPlaceholderV(icon, iconState, dir),
-		color:  color,
-		dir:    dir,
+		name:         object.Path[strings.LastIndex(object.Path, "/")+1:],
+		orig:         object,
+		sprite:       dmicon.Cache.GetSpriteOrPlaceholderV(icon, iconState, dir),
+		color:        color,
+		dir:          dir,
+		iconRevision: dmicon.LayoutRevision,
 	}
 
 	e.treeNodes[object.Path] = node

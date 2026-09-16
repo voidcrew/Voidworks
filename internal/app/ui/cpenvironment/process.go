@@ -100,6 +100,7 @@ func (e *Environment) showFilteredNodes() {
 	for clipper.Step() {
 		for i := clipper.DisplayStart; i < clipper.DisplayEnd; i++ {
 			node := e.filteredTreeNodes[i]
+			e.newTreeNode(node.orig)
 			if e.showAttachment(node) {
 				imgui.SameLine()
 			}

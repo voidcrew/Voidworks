@@ -56,7 +56,7 @@ func (ws *WsShip) option(id string) optionInfo {
 		return info
 	}
 	info := optionInfo{price: "Free"}
-	if costs, err := ws.project.PartCosts("module/" + id); err == nil {
+	if costs, err := ws.project.DisplayPartCosts("module/" + id); err == nil {
 		info.price = costs.Summary()
 	}
 	if jobs, err := ws.project.CrewJobs(ws.project.RoomCrewScope(id, ws.currentTheme().ID)); err == nil {

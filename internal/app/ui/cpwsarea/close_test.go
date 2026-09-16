@@ -34,6 +34,33 @@ type closeTestDrafts struct {
 
 func (c *closeTestDrafts) SaveAll() bool { c.saveAlls++; return c.saveOK }
 
+type closeTestDocument struct {
+	closeTestContent
+	discarded bool
+}
+
+func (c *closeTestDocument) DiscardChanges()      { c.discarded = true }
+func (*closeTestDocument) CommandStackId() string { return "sprite-test" }
+
+func TestDiscardDocumentDoesNotReplayHistory(t *testing.T) {
+	for _, multiple := range []bool{false, true} {
+		content := &closeTestDocument{}
+		ws := workspace.New(content)
+		commands := command.NewStorage()
+		commands.SetStack(ws.CommandStackId())
+		commands.Push(command.Make("must not replay", func() { t.Fatal("discard replayed pixel history") }, func() {}))
+		area := &WsArea{app: &closeTestApp{commands: commands}, workspaces: []*workspace.Workspace{ws}}
+		if multiple {
+			area.makeCloseWorkspacesDialog(area.workspaces, area.workspaces, nil).ActionNo()
+		} else {
+			area.makeCloseWorkspaceDialog(ws, nil).ActionNo()
+		}
+		if !content.discarded || !content.disposed {
+			t.Fatal("document was not discarded and closed")
+		}
+	}
+}
+
 // Updates use the same close confirmation as Exit. Cancellation and a failed
 // save must keep all workspaces alive and deny permission to restart.
 func TestCloseConfirmationProtectsUnsavedWork(t *testing.T) {

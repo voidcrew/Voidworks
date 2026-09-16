@@ -25,14 +25,15 @@ import (
 
 type Preview struct {
 	workspace.Content
-	source  *dmmap.Dmm
-	dme     *dmenv.Dme
-	scene   *mappreview.Scene
-	options mappreview.Options
-	canvas  *canvas.Canvas
-	control *canvas.Control
-	fit     bool
-	message string
+	source       *dmmap.Dmm
+	dme          *dmenv.Dme
+	scene        *mappreview.Scene
+	options      mappreview.Options
+	canvas       *canvas.Canvas
+	control      *canvas.Control
+	fit          bool
+	message      string
+	iconRevision uint64
 }
 
 func New(source *dmmap.Dmm, dme *dmenv.Dme) *Preview {
@@ -40,14 +41,26 @@ func New(source *dmmap.Dmm, dme *dmenv.Dme) *Preview {
 }
 
 func NewWithOptions(source *dmmap.Dmm, dme *dmenv.Dme, options mappreview.Options) *Preview {
+	return newPreview(source, dme, options, true)
+}
+
+// NewSprite keeps the map's loaded appearances. Opening an icon from a map
+// must not synchronously parse the whole game again just to show its context.
+func NewSprite(source *dmmap.Dmm, dme *dmenv.Dme) *Preview {
+	return newPreview(source, dme, mappreview.Options{Smoothing: true, Lighting: true, PoweredFixtures: true, ExteriorLight: true}, false)
+}
+
+func newPreview(source *dmmap.Dmm, dme *dmenv.Dme, options mappreview.Options, compile bool) *Preview {
 	p := &Preview{source: source, dme: dme, canvas: canvas.New(), control: canvas.NewControl(), fit: true,
 		options: options}
 	p.control.AtCursor = true
-	if compiled, err := dme.PreviewEnvironment(); err == nil {
-		p.source = mappreview.CompiledAppearances(source, dme, compiled)
-		p.dme = compiled
-	} else {
-		p.message = "Compiled appearances could not be loaded; showing editor sprites. " + err.Error()
+	if compile {
+		if compiled, err := dme.PreviewEnvironment(); err == nil {
+			p.source = mappreview.CompiledAppearances(source, dme, compiled)
+			p.dme = compiled
+		} else {
+			p.message = "Compiled appearances could not be loaded; showing editor sprites. " + err.Error()
+		}
 	}
 	p.canvas.ClearColor = canvas.Color{R: .045, G: .05, B: .06, A: 1}
 	p.rebuild()
@@ -84,6 +97,7 @@ func hasState(icon, state string) bool {
 }
 
 func (p *Preview) rebuild() {
+	p.iconRevision = dmicon.LayoutRevision
 	p.scene = mappreview.Build(p.source, p.dme, p.options, hasState)
 	p.canvas.Render().ReplaceBucket(p.scene.Map, 1)
 	p.canvas.Render().SetUnitProcessor(p)
@@ -91,6 +105,9 @@ func (p *Preview) rebuild() {
 }
 
 func (p *Preview) Process() {
+	if p.iconRevision != dmicon.LayoutRevision {
+		p.rebuild()
+	}
 	width := imgui.ContentRegionAvail().X
 	changed := imgui.Checkbox("Smoothing", &p.options.Smoothing)
 	imgui.SameLine()
@@ -160,6 +177,8 @@ func (p *Preview) Process() {
 	}
 	imgui.EndChild()
 }
+
+func (p *Preview) SpriteContext() (*dmmap.Dmm, *dmenv.Dme) { return p.source, p.dme }
 
 func (p *Preview) export() {
 	name := strings.TrimSuffix(filepath.Base(p.source.Name), filepath.Ext(p.source.Name)) + "-preview.png"

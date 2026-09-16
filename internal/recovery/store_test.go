@@ -9,6 +9,40 @@ import (
 	"time"
 )
 
+func TestDiscoverAllMissingSourcesAndLiveSessions(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"deleted.dmi", "untitled-dmi", "still-open.dmi"} {
+		s, err := Open(root, filepath.Join(t.TempDir(), name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = s.Save([]byte(name), []string{name}, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		if name == "still-open.dmi" {
+			defer s.Close()
+		} else {
+			s.Close()
+		}
+	}
+	entries, err := PendingAll(root)
+	if err != nil || len(entries) != 2 {
+		t.Fatal("missing inactive drafts or exposed active editor", len(entries), err)
+	}
+	for _, entry := range entries {
+		if entry.Err != nil || string(entry.Snapshot.Data) == "still-open.dmi" {
+			t.Fatal("incorrect recovery discovery", entry.Err)
+		}
+	}
+	second, err := PendingAll(root)
+	if err != nil || len(second) != 0 {
+		t.Fatal("claimed drafts offered a second time", err)
+	}
+	for _, entry := range entries {
+		entry.Store.Close()
+	}
+}
+
 func TestAtomicGenerationsLiveSessionsAndCorruptionFallback(t *testing.T) {
 	root := t.TempDir()
 	environment := filepath.Join(t.TempDir(), "game.dme")

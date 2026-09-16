@@ -82,6 +82,13 @@ func New(app App) *WsRuin {
 	ws.refresh()
 	return ws
 }
+
+func (ws *WsRuin) SpriteContext() (*dmmap.Dmm, *dmenv.Dme) {
+	if ws.planetPreview != nil {
+		return ws.planetPreview.SpriteContext()
+	}
+	return nil, ws.app.LoadedEnvironment()
+}
 func (ws *WsRuin) refresh() {
 	var err error
 	ws.catalog, err = ruin.Discover(ws.app.LoadedEnvironment())

@@ -133,6 +133,14 @@ func New(app app) *Menu {
 func (m *Menu) Process() {
 	w.MainMenuBar(w.Layout{
 		w.Menu("File", w.Layout{
+			w.Custom(func() {
+				if app, ok := m.app.(interface{ DoNewDMI() }); ok {
+					w.MenuItem("New DMI", app.DoNewDMI).IconEmpty().Build()
+				}
+				if app, ok := m.app.(interface{ DoRecoverDMI() }); ok {
+					w.MenuItem("Recover DMI drafts...", app.DoRecoverDMI).IconEmpty().Build()
+				}
+			}),
 			w.MenuItem("New Workspace", m.app.DoNewWorkspace).
 				Icon(icon.File).
 				Shortcut(platform.KeyModName(), "N"),
@@ -211,7 +219,7 @@ func (m *Menu) Process() {
 				Shortcut(platform.KeyModName(), "C"),
 			w.MenuItem("Paste", m.app.DoPaste).
 				Icon(icon.ContentPaste).
-				Enabled(m.app.Clipboard().HasData()).
+				Enabled(m.canPaste()).
 				Shortcut(platform.KeyModName(), "V"),
 			w.MenuItem("Cut", m.app.DoCut).
 				Icon(icon.ContentCut).
@@ -314,6 +322,13 @@ func (m *Menu) Process() {
 			}
 		}),
 	}).Build()
+}
+
+func (m *Menu) canPaste() bool {
+	if app, ok := m.app.(interface{ CanPaste() bool }); ok {
+		return app.CanPaste()
+	}
+	return m.app.Clipboard().HasData()
 }
 
 func (m *Menu) SetUpdateAvailable(version, description string) {

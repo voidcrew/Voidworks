@@ -100,6 +100,11 @@ func (t *TileMenu) showInstanceControls(i *dmminstance.Instance, idx int) w.Layo
 
 	return w.Layout{
 		w.Custom(func() {
+			if app, ok := t.app.(interface{ DoEditSprite(*dmmprefab.Prefab) }); ok {
+				w.MenuItem("Edit sprite", func() { app.DoEditSprite(p) }).IconEmpty().Build()
+			}
+		}),
+		w.Custom(func() {
 			if t.app.Prefs().Controls.QuickEditContextMenu {
 				t.pQuickEdit.ProcessV(i)
 				imgui.Separator()

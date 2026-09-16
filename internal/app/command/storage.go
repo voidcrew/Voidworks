@@ -64,10 +64,30 @@ func (s *Storage) PushV(id string, command Command) {
 	if stack, ok := s.commandStacks[id]; ok {
 		logStackAction(stack, "push command: "+command.name)
 		stack.undo = append(stack.undo, command)
+		clear(stack.redo)
 		stack.redo = stack.redo[:0]
 		stack.balance++
 	} else {
 		logNoStackAvailable("push command")
+	}
+}
+
+// LimitHistory bounds memory for pixel documents, while retaining at least the
+// latest action. Map/workshop histories keep their existing behavior.
+func (s *Storage) LimitHistory(id string, count int, bytes int64) {
+	stack := s.commandStacks[id]
+	if stack == nil || len(stack.undo) < 2 {
+		return
+	}
+	start := len(stack.undo) - 1
+	cost := stack.undo[start].cost
+	for start > 0 && len(stack.undo)-start < count && cost+stack.undo[start-1].cost <= bytes {
+		start--
+		cost += stack.undo[start].cost
+	}
+	if start > 0 {
+		stack.undo = append([]Command(nil), stack.undo[start:]...)
+		stack.balance = min(stack.balance, len(stack.undo))
 	}
 }
 

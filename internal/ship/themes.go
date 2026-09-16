@@ -895,7 +895,7 @@ func (p *Project) ThemeSummary(themeID string) (ThemeInfo, error) {
 		}
 		info.Options = append(info.Options, option)
 	}
-	cost, err := p.PartCosts("theme/" + theme.ID)
+	cost, err := p.DisplayPartCosts("theme/" + theme.ID)
 	if err != nil {
 		return ThemeInfo{}, err
 	}

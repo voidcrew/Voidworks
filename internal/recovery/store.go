@@ -164,7 +164,7 @@ func read(path, environment string) (*Snapshot, error) {
 	if err = json.Unmarshal(data, &v); err != nil {
 		return nil, err
 	}
-	if v.Version != 1 || projectFolder("", v.Environment) != projectFolder("", environment) {
+	if v.Version != 1 || (environment != "" && projectFolder("", v.Environment) != projectFolder("", environment)) {
 		return nil, fmt.Errorf("recovery belongs to a different project or version")
 	}
 	sum := sha256.Sum256(v.Data)
@@ -181,7 +181,28 @@ func Pending(root, environment string) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	var result []Entry
+	return pendingDirs(dirs, environment)
+}
+
+// PendingAll finds inactive documents whose source file may have moved or no
+// longer exists. Folder identity and checksums are still verified before use.
+func PendingAll(root string) ([]Entry, error) {
+	dirs, err := filepath.Glob(filepath.Join(root, "*", "session-*"))
+	if err != nil {
+		return nil, err
+	}
+	return pendingDirs(dirs, "")
+}
+
+func pendingDirs(dirs []string, environment string) (result []Entry, err error) {
+	var claimed []*Store
+	defer func() {
+		if err != nil {
+			for _, store := range claimed {
+				store.Close()
+			}
+		}
+	}()
 	for _, dir := range dirs {
 		files, e := snapshots(dir)
 		if e != nil {
@@ -195,10 +216,15 @@ func Pending(root, environment string) ([]Entry, error) {
 			continue
 		}
 		store := &Store{dir, environment, lock}
+		claimed = append(claimed, store)
 		entry := Entry{Store: store}
 		for _, file := range files {
 			entry.Snapshot, entry.Err = read(file, environment)
+			if entry.Err == nil && projectFolder(filepath.Dir(filepath.Dir(dir)), entry.Snapshot.Environment) != filepath.Dir(dir) {
+				entry.Err = fmt.Errorf("recovery belongs to a different document folder")
+			}
 			if entry.Err == nil {
+				store.environment = entry.Snapshot.Environment
 				break
 			}
 		}

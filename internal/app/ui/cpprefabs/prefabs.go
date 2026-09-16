@@ -5,6 +5,7 @@ import (
 	"sdmm/internal/app/ui/cpwsarea/wsmap/pmap/editor"
 	"sdmm/internal/app/window"
 	"sdmm/internal/dmapi/dmenv"
+	"sdmm/internal/dmapi/dmicon"
 
 	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/dmapi/dmmap/dmmdata/dmmprefab"
@@ -28,8 +29,9 @@ type Prefabs struct {
 
 	app App
 
-	nodes      []*prefabNode
-	selectedId uint64
+	nodes        []*prefabNode
+	selectedId   uint64
+	iconRevision uint64
 
 	tmpDoScrollToPrefab bool
 }
@@ -77,4 +79,15 @@ func (p *Prefabs) doSelect(node *prefabNode) {
 
 func (p *Prefabs) iconSize() float32 {
 	return 32 * window.PointSize()
+}
+
+func (p *Prefabs) refreshSprites() {
+	if p.iconRevision == dmicon.LayoutRevision {
+		return
+	}
+	for _, node := range p.nodes {
+		updated := newPrefabNodeV(node.orig, node.name)
+		node.sprite = updated.sprite
+	}
+	p.iconRevision = dmicon.LayoutRevision
 }

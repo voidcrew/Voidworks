@@ -34,6 +34,7 @@ func exerciseRecovery(t *testing.T, ws *WsShip, render func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	hidden.Settings.Hidden = true
 	ws.projects[hidden.Hull.Type] = hidden
 	ws.beginCrew()
 	ws.loadCrewScope("ship")

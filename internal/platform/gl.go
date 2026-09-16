@@ -46,6 +46,8 @@ var (
 )
 
 func InitImGuiGL() {
+	io := imgui.CurrentIO()
+	io.SetBackendFlags(io.GetBackendFlags() | imgui.BackendFlagsRendererHasVtxOffset)
 	createDeviceObjects()
 }
 
@@ -85,8 +87,6 @@ func Render(drawData imgui.DrawData) {
 	bind(&displayPos, &displaySize, int32(fbWidth), int32(fbHeight))
 
 	for _, list := range drawData.CommandLists() {
-		var indexBufferOffset uintptr
-
 		vertexBuffer, vertexBufferSize := list.VertexBuffer()
 		indexBuffer, indexBufferSize := list.IndexBuffer()
 		gl.BufferData(gl.ARRAY_BUFFER, vertexBufferSize, vertexBuffer, gl.STREAM_DRAW)
@@ -107,10 +107,8 @@ func Render(drawData imgui.DrawData) {
 			} else if clipRectX < fbWidth && clipRectY < fbHeight && clipRectZ > 0 && clipRectW > 0 {
 				gl.Scissor(int32(clipRectX), int32(fbHeight-clipRectW), int32(clipRectZ-clipRectX), int32(clipRectW-clipRectY))
 				gl.BindTexture(gl.TEXTURE_2D, uint32(cmd.TextureID()))
-				gl.DrawElementsWithOffset(gl.TRIANGLES, int32(cmd.ElementCount()), uint32(gl.UNSIGNED_SHORT), indexBufferOffset)
+				gl.DrawElementsBaseVertexWithOffset(gl.TRIANGLES, int32(cmd.ElementCount()), uint32(gl.UNSIGNED_SHORT), uintptr(cmd.IndexOffset()*indexSize), int32(cmd.VertexOffset()))
 			}
-
-			indexBufferOffset += uintptr(cmd.ElementCount() * indexSize)
 		}
 	}
 

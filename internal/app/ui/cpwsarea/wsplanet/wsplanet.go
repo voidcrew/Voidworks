@@ -19,6 +19,7 @@ import (
 	"sdmm/internal/app/window"
 	"sdmm/internal/dmapi/dmenv"
 	"sdmm/internal/dmapi/dmicon"
+	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/dmapi/dmmap/dmminstance"
 	"sdmm/internal/imguiext/style"
 	"sdmm/internal/mappreview"
@@ -53,6 +54,7 @@ type Workspace struct {
 	picking, creating, blank, fit, cave, population, narrowEditor, review bool
 	last                                                                  planet.State
 	renderKey                                                             string
+	iconRevision                                                          uint64
 	lastBuild                                                             time.Time
 	items                                                                 []string
 	deleting                                                              bool
@@ -246,6 +248,19 @@ func (w *Workspace) rebuild() {
 	if w.project == nil {
 		return
 	}
+	if w.iconRevision != dmicon.LayoutRevision && w.preview != nil {
+		w.iconRevision = dmicon.LayoutRevision
+		w.scene = mappreview.Build(w.preview.Map, w.dme, mappreview.Options{Smoothing: true, Lighting: w.lighting}, func(icon, state string) bool {
+			d, e := dmicon.Cache.Get(icon)
+			if e != nil {
+				return false
+			}
+			_, ok := d.States[state]
+			return ok
+		})
+		w.canvas.Render().ReplaceBucket(w.scene.Map, 1)
+		w.canvas.Render().SetPreviewLighting(w.scene.Lighting)
+	}
 	o := planet.PreviewOptions{Caves: w.cave, Populate: w.population}
 	if w.mode == 1 {
 		o.Biome = w.selected
@@ -283,6 +298,13 @@ func (w *Workspace) rebuild() {
 	w.canvas.Render().ReplaceBucket(w.scene.Map, 1)
 	w.canvas.Render().SetPreviewLighting(w.scene.Lighting)
 	w.canvas.Render().SetUnitProcessor(w)
+}
+
+func (w *Workspace) SpriteContext() (*dmmap.Dmm, *dmenv.Dme) {
+	if w.preview == nil {
+		return nil, w.dme
+	}
+	return w.preview.Map, w.dme
 }
 
 func (w *Workspace) commitName() bool {
