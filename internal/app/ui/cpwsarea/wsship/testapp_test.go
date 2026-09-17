@@ -26,6 +26,12 @@ type previewApp struct {
 
 func (a *previewApp) ShipFilesSaved() { a.previewRequests++ }
 
+func (a *previewApp) StopShipPreviews() {
+	a.previewStatus = shippreview.Status{Phase: "stopped", Message: "Preview generation is paused. Your ship saves are safe. Resume when ready; completed renders will be reused."}
+}
+
+func (a *previewApp) ResumeShipPreviews() { a.previewRequests++ }
+
 func (a *previewApp) DoPreviewMap(*dmmap.Dmm) {}
 
 func (a *previewApp) ShipPreviewStatus() shippreview.Status { return a.previewStatus }
