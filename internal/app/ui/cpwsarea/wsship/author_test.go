@@ -191,6 +191,7 @@ func exerciseAuthoring(t *testing.T, ws *WsShip, dme *dmenv.Dme, render func()) 
 	}
 	ws.defaults()
 	ws.rebuild()
+	exerciseResizeControl(t, ws, render)
 	exerciseHelperMovesAndResize(t, ws, capture)
 	ws.source = 1
 	ws.rebuild()

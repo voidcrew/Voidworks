@@ -135,6 +135,10 @@ func TestRenderShipWorkspace(t *testing.T) {
 		}
 		remember()
 		if hull == "delta" {
+			if ws.project.Settings != nil {
+				t.Fatal("Delta must exercise resize without workshop authoring metadata")
+			}
+			exerciseResizeControl(t, ws, render)
 			exerciseShipContextContents(t, ws, render)
 			remember()
 		}

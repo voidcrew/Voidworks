@@ -368,12 +368,9 @@ func (ws *WsShip) buildControls() {
 	if workshop.DangerButton("Remove ship...") {
 		ws.requestRemoval(ws.project.Hull)
 	}
-	if ws.project.Settings != nil && imgui.CollapsingHeader("Ship details & canvas size") {
+	if ws.project.Settings != nil && imgui.CollapsingHeader("Ship details") {
 		if actionButton("Edit ship details...", false) {
 			ws.beginTask(taskSettings)
-		}
-		if actionButton("Change canvas size...", false) {
-			ws.beginTask(taskResize)
 		}
 	}
 	if imgui.CollapsingHeader("Advanced view & source files") {
@@ -398,6 +395,13 @@ func (ws *WsShip) buildControls() {
 }
 
 func (ws *WsShip) canvasHeader() {
+	if ws.task == taskPaint {
+		if imgui.Button("Change canvas size...") {
+			ws.beginTask(taskResize)
+		}
+		tooltip("Add or remove space around the ship's hull, including on existing ships.")
+		imgui.SameLine()
+	}
 	if imgui.Button("Show whole ship") {
 		if ws.isolated {
 			ws.flush()

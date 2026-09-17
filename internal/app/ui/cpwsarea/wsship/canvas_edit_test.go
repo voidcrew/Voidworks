@@ -2,13 +2,72 @@ package wsship
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/SpaiR/imgui-go"
 
 	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/dmapi/dmmap/dmminstance"
 	"sdmm/internal/ship"
 	"sdmm/internal/util"
 )
+
+// Click the actual hull resize entry point with either hull or room selected.
+// Runs on both a loaded Delta and the disposable workshop-authored fixture.
+func exerciseResizeControl(t *testing.T, ws *WsShip, render func()) {
+	t.Helper()
+	io := imgui.CurrentIO()
+	originalSource := ws.source
+	defer func() {
+		io.SetMouseButtonDown(0, false)
+		io.SetMousePosition(imgui.Vec2{X: -1000, Y: -1000})
+		ws.finishTask()
+		ws.source = originalSource
+		ws.rebuild()
+	}()
+	for source := 0; source < 2 && source < len(ws.assembly.Sources); source++ {
+		ws.source = source
+		ws.rebuild()
+		ws.finishTask()
+		var button imgui.Vec2
+		frame := func() {
+			imgui.NewFrame()
+			imgui.SetNextWindowPos(imgui.Vec2{X: 20, Y: 20})
+			imgui.SetNextWindowSize(imgui.Vec2{X: 1100, Y: 160})
+			imgui.BeginV("Ship canvas controls regression", nil, imgui.WindowFlagsNoSavedSettings|imgui.WindowFlagsNoResize|imgui.WindowFlagsNoMove)
+			button = imgui.CursorScreenPos().Plus(imgui.CurrentStyle().FramePadding()).Plus(imgui.CalcTextSize("Change canvas size...", false, -1).Times(.5))
+			ws.canvasHeader()
+			imgui.End()
+			imgui.Render()
+		}
+		for i := 0; i < 3; i++ {
+			frame()
+		}
+		io.SetMousePosition(button)
+		frame()
+		io.SetMouseButtonDown(0, true)
+		frame()
+		io.SetMouseButtonDown(0, false)
+		frame()
+		if ws.task != taskResize {
+			t.Fatalf("hull resize control unavailable for source %d (workshop metadata: %t)", source, ws.project.Settings != nil)
+		}
+		hull := ws.assembly.Sources[0].Data
+		if ws.width != int32(hull.MaxX) || ws.height != int32(hull.MaxY) {
+			t.Fatal("resize form uses selected room dimensions instead of hull dimensions")
+		}
+		io.SetMousePosition(imgui.Vec2{X: -1000, Y: -1000})
+		for i := 0; i < 3; i++ {
+			render()
+		}
+		if dst := os.Getenv("SHIP_RENDER_TEST_OUTPUT"); dst != "" && source == 0 && ws.project.Settings == nil {
+			captureFrame(t, filepath.Join(dst, "loaded-ship-resize-form.png"), 1400, 960)
+		}
+		ws.finishTask()
+	}
+}
 
 // Runs on the disposable authored ship in the native workflow. The real map
 // editor, workspace refresh, command history and rendered resize form are used.
