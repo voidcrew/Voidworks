@@ -313,27 +313,22 @@ class IncrementalPreviews:
         # the editor, generator or selected environment must not turn a ship
         # save into a fleet rebuild. Rendering changes use the explicit command.
         matching = not self.force and self.record_matches(previous, record, source)
-        # Existing committed previews already carry source hashes. Adopt those
-        # on the first incremental run instead of needlessly rendering a fleet.
+        # The checkout manifest can validate a newer or Git-restored image even
+        # when an older local cache has different PNG bytes for the same map.
         legacy = (not self.force
-                  and not self.record_matches(previous, record, source)
                   and isinstance(self.legacy.get(name), str)
                   and self.legacy.get(name) in self.digests[source])
         progress = self.progress.get(name, {})
         if not isinstance(progress, dict):
             progress = {}
         checkpoint = self.progress_dir / name
-        reused = (self.record_matches(progress, record, source)
-                  and (not self.force or (self.rebuild and progress.get("rebuild") == self.rebuild
-                                         and self.context_matches(progress.get("context"))))
-                  and ordinary_file(checkpoint) and progress.get("png_sha256") == file_hash(checkpoint))
-        if reused:
-            shutil.copy2(checkpoint, destination)
-        if not reused and (matching or legacy) and ordinary_file(target):
+        # Prefer the current checkout. Checkpoints recover missing/outdated
+        # previews; they must not reapply discarded diffs to unchanged ships.
+        reused = False
+        if (matching or legacy) and ordinary_file(target):
             image_hash = hashlib.sha256(target.read_bytes()).hexdigest()
-            if matching:
-                reused = previous.get("png_sha256") == image_hash
-            elif legacy:
+            reused = matching and previous.get("png_sha256") == image_hash
+            if not reused and legacy:
                 from PIL import Image
                 try:
                     with Image.open(target) as image:
@@ -343,6 +338,12 @@ class IncrementalPreviews:
                     pass
             if reused:
                 shutil.copy2(target, destination)
+        if (not reused and self.record_matches(progress, record, source)
+                and (not self.force or (self.rebuild and progress.get("rebuild") == self.rebuild
+                                       and self.context_matches(progress.get("context"))))
+                and ordinary_file(checkpoint) and progress.get("png_sha256") == file_hash(checkpoint)):
+            shutil.copy2(checkpoint, destination)
+            reused = True
         if reused:
             self.reused += 1
         else:
