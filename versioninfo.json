@@ -3,13 +3,13 @@
     "FileVersion": {
       "Major": 0,
       "Minor": 5,
-      "Patch": 18,
+      "Patch": 21,
       "Build": 1
     },
     "ProductVersion": {
       "Major": 0,
       "Minor": 5,
-      "Patch": 18,
+      "Patch": 21,
       "Build": 1
     },
     "FileFlagsMask": "3f",
@@ -22,14 +22,14 @@
     "Comments": "",
     "CompanyName": "Voidcrew",
     "FileDescription": "Voidworks",
-    "FileVersion": "0.5.18-beta.1",
+    "FileVersion": "0.5.21-beta.1",
     "InternalName": "Voidworks",
     "LegalCopyright": "Copyright (C) 2019-2024",
     "LegalTrademarks": "",
     "OriginalFilename": "Voidworks.exe",
     "PrivateBuild": "",
     "ProductName": "Voidworks",
-    "ProductVersion": "0.5.18-beta.1",
+    "ProductVersion": "0.5.21-beta.1",
     "SpecialBuild": ""
   },
   "VarFileInfo": {

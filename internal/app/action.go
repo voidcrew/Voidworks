@@ -101,21 +101,25 @@ func (a *app) AvailableMaps() (availableMaps []string) {
 	}
 
 	root := a.LoadedEnvironment().RootDir
+	roots := []string{root}
 	if a.HasVoidcrewProject() {
-		root = filepath.Join(root, "_maps")
+		// Ships and ruins use the main tree; outposts and event maps also live
+		// in Voidcrew's own map tree. Avoid scanning runtime data and checkouts.
+		roots = []string{filepath.Join(root, "_maps"), filepath.Join(root, "voidcrew", "_maps")}
 	}
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
+	for _, mapRoot := range roots {
+		err := filepath.WalkDir(mapRoot, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !entry.IsDir() && strings.EqualFold(filepath.Ext(path), ".dmm") {
+				availableMaps = append(availableMaps, path)
+			}
+			return nil
+		})
+		if err != nil && !os.IsNotExist(err) {
+			log.Printf("unable to find available maps in %s: %v", mapRoot, err)
 		}
-		if !entry.IsDir() && strings.EqualFold(filepath.Ext(path), ".dmm") {
-			availableMaps = append(availableMaps, path)
-		}
-		return err
-	})
-
-	if err != nil {
-		log.Print("unable to find available maps:", err)
 	}
 
 	return availableMaps

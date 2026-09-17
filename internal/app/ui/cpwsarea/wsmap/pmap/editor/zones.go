@@ -23,6 +23,9 @@ var zoneDirs = map[util.Point]int{
 	util.Point{Y: -1}: dm.DirSouth,
 }
 
+// RefreshAreaZones updates overlays after a workspace replaces map contents.
+func (e *Editor) RefreshAreaZones() { e.updateAreasZones() }
+
 func (e *Editor) updateAreasZones() {
 	type coords map[util.Point]bool
 

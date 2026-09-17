@@ -39,6 +39,7 @@ type WsShip struct {
 	itemDescription                  string
 	descriptionOriginal              string
 	width, height                    int32
+	resizeDirection                  dmmap.ResizeDirection
 	stage                            int
 	task                             buildTask
 	wizardStep, sizePreset           int
@@ -514,6 +515,20 @@ func (ws *WsShip) change(label string, action func() error) {
 	}
 	after := p.Capture()
 	afterSelection := copySelection(ws.selected)
+	resized := false
+	for file, m := range after.Maps {
+		if old, ok := before.Maps[file]; ok && (old.MaxX != m.MaxX || old.MaxY != m.MaxY || old.MaxZ != m.MaxZ) {
+			resized = true
+		}
+	}
+	refreshSelection := func() {
+		if resized {
+			tools.Selected().OnDeselect()
+		} else {
+			tools.RefreshGrabSelection()
+		}
+		ws.app.SyncVarEditor()
+	}
 	restore := func(state ship.State, selection map[string]string) {
 		ws.endShape()
 		ws.stage, ws.wizard, ws.task = stepBuild, false, taskPaint
@@ -534,6 +549,7 @@ func (ws *WsShip) change(label string, action func() error) {
 		}
 		for _, pane := range ws.panes {
 			pane.Snapshot().Sync()
+			pane.Editor().RefreshAreaZones()
 			pane.CanvasState().SetMaxX(pane.Dmm().MaxX)
 			pane.CanvasState().SetMaxY(pane.Dmm().MaxY)
 		}
@@ -547,15 +563,16 @@ func (ws *WsShip) change(label string, action func() error) {
 			ws.beginCosts(costScope)
 		}
 		ws.OnFocusChange(true)
-		tools.RefreshGrabSelection()
+		refreshSelection()
 	}
 	for _, pane := range ws.panes {
 		pane.Snapshot().Sync()
+		pane.Editor().RefreshAreaZones()
 		pane.CanvasState().SetMaxX(pane.Dmm().MaxX)
 		pane.CanvasState().SetMaxY(pane.Dmm().MaxY)
 	}
 	ws.app.CommandStorage().PushV(ws.CommandStackId(), command.Make(label, func() { restore(before, sel) }, func() { restore(after, afterSelection) }))
 	ws.catalog.Hulls[h] = p.Hull
 	ws.rebuild()
-	tools.RefreshGrabSelection()
+	refreshSelection()
 }

@@ -12,11 +12,10 @@ type Tile struct {
 	Coord                    util.Point
 	instances                Instances
 	DefaultTurf, DefaultArea *dmmprefab.Prefab
-	Reserved                 dmmdata.Prefabs
 }
 
 func (t Tile) Copy() Tile {
-	return Tile{Coord: t.Coord, instances: t.instances.DeepCopy(), DefaultTurf: t.DefaultTurf, DefaultArea: t.DefaultArea, Reserved: t.Reserved}
+	return Tile{Coord: t.Coord, instances: t.instances.DeepCopy(), DefaultTurf: t.DefaultTurf, DefaultArea: t.DefaultArea}
 }
 
 func (t *Tile) Set(instances Instances) {
@@ -54,7 +53,8 @@ func (t *Tile) InstancesRemoveByInstance(i *dmminstance.Instance) {
 	}
 }
 
-// InstancesRegenerate adds missing base prefabs, if there are some of them.
+// InstancesRegenerate restores the required turf and area only. Mapping helpers
+// are ordinary editable instances: restoring them here duplicates moves and cuts.
 func (t *Tile) InstancesRegenerate() {
 	var hasArea, hasTurf bool
 	for _, instance := range t.instances {
@@ -77,17 +77,5 @@ func (t *Tile) InstancesRegenerate() {
 			turf = BaseTurf
 		}
 		t.InstancesAdd(turf)
-	}
-	for _, prefab := range t.Reserved {
-		found := false
-		for _, instance := range t.instances {
-			if instance.Prefab().Id() == prefab.Id() {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.InstancesAdd(prefab)
-		}
 	}
 }

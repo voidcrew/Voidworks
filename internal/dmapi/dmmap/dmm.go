@@ -65,6 +65,13 @@ func (d *Dmm) IsInstanceExist(instanceId uint64) bool {
 }
 
 func (d *Dmm) SetMapSize(maxX, maxY, maxZ int) {
+	d.Resize(maxX, maxY, maxZ, ResizeNorthEast)
+}
+
+// Resize moves retained tiles and their instances together, preserving IDs and
+// prefab overrides. Only tiles outside the new bounds are cropped.
+func (d *Dmm) Resize(maxX, maxY, maxZ int, direction ResizeDirection) {
+	offset := direction.Offset(maxX-d.MaxX, maxY-d.MaxY)
 	newTiles := make([]*Tile, maxX*maxY*maxZ)
 
 	for z := 1; z <= maxZ; z++ {
@@ -72,8 +79,14 @@ func (d *Dmm) SetMapSize(maxX, maxY, maxZ int) {
 			for x := 1; x <= maxX; x++ {
 				coord := util.Point{X: x, Y: y, Z: z}
 				tileIndex := tileIndex(maxX, maxY, x, y, z)
-				if d.HasTile(coord) {
-					newTiles[tileIndex] = d.GetTile(util.Point{X: x, Y: y, Z: z})
+				from := coord.Minus(offset)
+				if d.HasTile(from) {
+					tile := d.GetTile(from).Copy()
+					tile.Coord = coord
+					for i, instance := range tile.instances {
+						tile.instances[i] = instance.CopyAt(coord)
+					}
+					newTiles[tileIndex] = &tile
 				} else {
 					// Fill an empty tile with basic prefabs.
 					newTiles[tileIndex] = &Tile{
