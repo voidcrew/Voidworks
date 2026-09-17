@@ -258,11 +258,9 @@ class IncrementalPreviews:
         for path in self.sources:
             self.source(path)
 
-    def render_reason(self, name, previous, matching, legacy, same_context, target):
+    def render_reason(self, name, previous, matching, legacy, target):
         if self.force:
             return "full rebuild requested"
-        if self.previous and not same_context:
-            return "preview tools or environment changed"
         if matching or legacy:
             if not target.exists() and not target.is_symlink():
                 return "preview file missing"
@@ -301,6 +299,9 @@ class IncrementalPreviews:
                 "pillow": Image.__version__,
                 "environment": os.path.normcase(os.path.relpath(self.environment.resolve(), self.script.resolve().parents[2])),
             }
+            if not self.force and self.previous and not self.context_matches(self.previous.get("context")):
+                print("Preview tools or environment changed; keeping unchanged previews. "
+                      "Use Rebuild all previews to apply rendering changes.", flush=True)
         name = destination.name
         target = self.output / name
         if not preview_name(name):
@@ -308,11 +309,13 @@ class IncrementalPreviews:
         record = {"source": os.path.normcase(os.path.relpath(source, self.script.resolve().parents[2])), "src_md5": digest}
         previous_images = self.previous.get("images", {})
         previous = previous_images.get(name) if isinstance(previous_images, dict) else None
-        same_context = self.context_matches(self.previous.get("context"))
-        matching = (not self.force and same_context and self.record_matches(previous, record, source))
+        # Ordinary saves refresh map edits and missing/damaged images. Updating
+        # the editor, generator or selected environment must not turn a ship
+        # save into a fleet rebuild. Rendering changes use the explicit command.
+        matching = not self.force and self.record_matches(previous, record, source)
         # Existing committed previews already carry source hashes. Adopt those
         # on the first incremental run instead of needlessly rendering a fleet.
-        legacy = (not self.force and (not self.previous or same_context)
+        legacy = (not self.force
                   and not self.record_matches(previous, record, source)
                   and isinstance(self.legacy.get(name), str)
                   and self.legacy.get(name) in self.digests[source])
@@ -320,9 +323,9 @@ class IncrementalPreviews:
         if not isinstance(progress, dict):
             progress = {}
         checkpoint = self.progress_dir / name
-        reused = (self.context_matches(progress.get("context"))
-                  and self.record_matches(progress, record, source)
-                  and (not self.force or (self.rebuild and progress.get("rebuild") == self.rebuild))
+        reused = (self.record_matches(progress, record, source)
+                  and (not self.force or (self.rebuild and progress.get("rebuild") == self.rebuild
+                                         and self.context_matches(progress.get("context"))))
                   and ordinary_file(checkpoint) and progress.get("png_sha256") == file_hash(checkpoint))
         if reused:
             shutil.copy2(checkpoint, destination)
@@ -343,7 +346,7 @@ class IncrementalPreviews:
         if reused:
             self.reused += 1
         else:
-            reason = self.render_reason(name, previous, matching, legacy, same_context, target)
+            reason = self.render_reason(name, previous, matching, legacy, target)
             print(f"Rendering changed or missing preview: {name} ({reason})", flush=True)
             self.original_render(tool, source, destination, temp, dmm)
             self.source(source)

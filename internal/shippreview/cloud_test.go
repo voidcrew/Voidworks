@@ -112,7 +112,8 @@ class CloudPreviews(unittest.TestCase):
         self.assertIn('Preview refresh: full rebuild requested.', log)
         self.assertEqual(log.count('(full rebuild requested)'), 4)
         (self.root / 'renderer').write_text('changed renderer')
-        self.assertEqual(self.generate(all_maps).count('(preview tools or environment changed)'), 4)
+        log = self.generate([])
+        self.assertIn('Use Rebuild all previews to apply rendering changes', log)
 
     def test_cloud_tags_do_not_allow_links_or_unknown_reparse_points(self):
         for tag in [0x9000001A | (n << 12) for n in range(16)]:

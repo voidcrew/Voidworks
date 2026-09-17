@@ -154,7 +154,86 @@ func TestIncrementalPreviewsRenderOnlyChangedOrMissingMaps(t *testing.T) {
 	refreshPreviews(t, root, client, false, "new_ship.dmm")
 	refreshPreviews(t, root, client, true, "alpha.dmm", "beta.dmm", "new_ship.dmm", "room.dmm")
 	write(t, filepath.Join(root, "renderer"), "new renderer version")
-	refreshPreviews(t, root, client, false, "alpha.dmm", "beta.dmm", "new_ship.dmm", "room.dmm")
+	refreshPreviews(t, root, client, false)
+}
+
+func TestToolUpdatesDoNotRebuildUnchangedMapsOnSave(t *testing.T) {
+	root, client := incrementalFixture(t)
+	all := []string{"alpha.dmm", "beta.dmm", "room.dmm", "room_blue.dmm"}
+	refreshPreviews(t, root, client, false, all...)
+	output := filepath.Join(root, "voidcrew/modules/ship_upgrades/previews")
+	old := time.Unix(1234567890, 0)
+	for _, name := range []string{"alpha.png", "beta.png", "room.png", "room_blue.png", "manifest.json"} {
+		if err := os.Chtimes(filepath.Join(output, name), old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(t, filepath.Join(root, Script), incrementalGenerator+"\n# Updated generator\n")
+	write(t, filepath.Join(root, "renderer"), "updated renderer")
+	// Model an older runtime, a different selected environment, and a partial
+	// local cache. Valid committed previews must still be adopted after updates.
+	cachePath := filepath.Join(client.folder(root), "render-cache.json")
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cache map[string]any
+	if err := json.Unmarshal(data, &cache); err != nil {
+		t.Fatal(err)
+	}
+	context := cache["context"].(map[string]any)
+	context["python"], context["pillow"], context["environment"] = "older Python", "older Pillow", "old.dme"
+	delete(cache["images"].(map[string]any), "beta.png")
+	data, _ = json.Marshal(cache)
+	write(t, cachePath, string(data))
+	if err := os.RemoveAll(filepath.Join(client.folder(root), "render-progress")); err != nil {
+		t.Fatal(err)
+	}
+	refreshPreviews(t, root, client, false)
+	for _, name := range []string{"alpha.png", "beta.png", "room.png", "room_blue.png", "manifest.json"} {
+		info, err := os.Stat(filepath.Join(output, name))
+		if err != nil || !info.ModTime().Equal(old) {
+			t.Fatalf("tool update rewrote unchanged preview %s: %v", name, err)
+		}
+	}
+	write(t, filepath.Join(root, "maps/beta.dmm"), "12 edited ship")
+	refreshPreviews(t, root, client, false, "beta.dmm")
+	// Real missing/damaged previews still need repair when no checkpoint exists.
+	if err := os.RemoveAll(filepath.Join(client.folder(root), "render-progress")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(output, "alpha.png")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(output, "room.png"), "broken PNG")
+	refreshPreviews(t, root, client, false, "alpha.dmm", "room.dmm")
+	refreshPreviews(t, root, client, true, all...)
+	refreshPreviews(t, root, client, false)
+}
+
+func TestStopAfterToolUpdateDoesNotRequireFinishingFleetRebuild(t *testing.T) {
+	root, client := incrementalFixture(t)
+	all := []string{"alpha.dmm", "beta.dmm", "room.dmm", "room_blue.dmm"}
+	refreshPreviews(t, root, client, false, all...)
+	write(t, filepath.Join(root, "renderer"), "updated renderer")
+	write(t, filepath.Join(root, "fail"), "")
+	environment := filepath.Join(root, "selected.dme")
+	client.RequestFull(root, environment)
+	until(t, func() bool { return client.Status(root).Phase == "failed" })
+	client.Stop(root, environment)
+	until(t, func() bool { return client.Status(root).Phase == "stopped" })
+	if err := os.Remove(filepath.Join(root, "fail")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(root, "renders"), "")
+	client.Resume(root, environment)
+	until(t, func() bool { return client.Status(root).Phase == "complete" })
+	if data, _ := os.ReadFile(filepath.Join(root, "renders")); len(data) != 0 {
+		t.Fatalf("resume forced the rest of the fleet to rebuild: %s", data)
+	}
+	write(t, filepath.Join(root, "maps/room.dmm"), "12 actually changed")
+	refreshPreviews(t, root, client, false, "room.dmm")
+	refreshPreviews(t, root, client, true, all...)
 }
 
 func TestIncrementalFailurePreservesImagesManifestAndCache(t *testing.T) {
