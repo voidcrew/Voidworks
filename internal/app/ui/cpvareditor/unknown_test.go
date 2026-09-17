@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"sdmm/internal/app/config"
+	"sdmm/internal/app/ui/cpwsarea/wsmap/pmap/editor"
 	"sdmm/internal/dmapi/dmenv"
+	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/dmapi/dmmap/dmmdata/dmmprefab"
 	"sdmm/internal/dmapi/dmmap/dmminstance"
 	"sdmm/internal/dmapi/dmvars"
@@ -14,12 +16,36 @@ import (
 
 type missingTypeApp struct {
 	App
-	dme *dmenv.Dme
-	cfg vareditorConfig
+	dme    *dmenv.Dme
+	cfg    vareditorConfig
+	editor *editor.Editor
 }
 
 func (a *missingTypeApp) LoadedEnvironment() *dmenv.Dme   { return a.dme }
 func (a *missingTypeApp) ConfigFind(string) config.Config { return &a.cfg }
+func (a *missingTypeApp) CurrentEditor() *editor.Editor   { return a.editor }
+
+func TestSyncFollowsResizedInstance(t *testing.T) {
+	a := &missingTypeApp{dme: &dmenv.Dme{Objects: map[string]*dmenv.Object{}}}
+	prefab := dmmprefab.New(42, "/obj/helper", &dmvars.Variables{})
+	old := dmminstance.New(util.Point{X: 1, Y: 1, Z: 1}, prefab)
+	live := old.CopyAt(util.Point{X: 2, Y: 1, Z: 1})
+	tile := &dmmap.Tile{Coord: live.Coord()}
+	tile.Set(dmmap.Instances{live})
+	m := &dmmap.Dmm{MaxX: 2, MaxY: 1, MaxZ: 1, Tiles: []*dmmap.Tile{{Coord: old.Coord()}, tile}}
+	a.editor = editor.New(nil, nil, m)
+	v := &VarEditor{app: a}
+	v.EditInstance(old)
+	v.Sync()
+	if instance, ok := v.EditedInstance(); !ok || instance != live {
+		t.Fatal("variable editor retained an instance at the old position")
+	}
+	tile.InstancesRemoveByInstance(live)
+	v.Sync()
+	if _, ok := v.EditedInstance(); ok {
+		t.Fatal("deleted/cropped instance remains editable")
+	}
+}
 
 func TestEditMissingTypePreservesMappedVariables(t *testing.T) {
 	app := &missingTypeApp{dme: &dmenv.Dme{Objects: map[string]*dmenv.Object{}}}

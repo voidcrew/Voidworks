@@ -2,28 +2,32 @@ package editor
 
 import (
 	"sdmm/internal/app/command"
+	"sdmm/internal/app/ui/cpwsarea/wsmap/tools"
 	"sdmm/internal/app/window"
 	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/util"
 )
 
 func (e *Editor) CommitMapSizeChange(oldMaxX, oldMaxY, oldMaxZ int) {
-	initialMapTiles := e.pMap.Snapshot().Initial().Copy().Tiles // Remember initial tiles to restore them on undo.
-	newMaxX, newMaxY, newMaxZ := e.dmm.MaxX, e.dmm.MaxY, e.dmm.MaxZ
+	before := e.pMap.Snapshot().Initial().Copy()
+	after := e.dmm.Copy()
+	restore := func(saved dmmap.Dmm) {
+		copy := saved.Copy()
+		*e.dmm = copy
+		e.onMapSizeChange(copy.MaxZ)
+	}
 
 	e.onMapSizeChange(e.dmm.MaxZ)
 
 	e.app.CommandStorage().PushV(e.pMap.CommandStackId(), command.Make("Set Map Size", func() {
-		e.dmm.SetMapSize(oldMaxX, oldMaxY, oldMaxZ)
-		e.dmm.Tiles = initialMapTiles
-		e.onMapSizeChange(oldMaxZ)
+		restore(before)
 	}, func() {
-		e.dmm.SetMapSize(newMaxX, newMaxY, newMaxZ)
-		e.onMapSizeChange(newMaxZ)
+		restore(after)
 	}))
 }
 
 func (e *Editor) onMapSizeChange(maxZ int) {
+	tools.Selected().OnDeselect()
 	// Ensure we are on the visible level.
 	if e.pMap.ActiveLevel() > maxZ {
 		e.pMap.SetActiveLevel(maxZ)
@@ -31,6 +35,7 @@ func (e *Editor) onMapSizeChange(maxZ int) {
 	e.pMap.Snapshot().Sync() // Do a full snapshots sync.
 	e.pMap.OnMapSizeChange()
 	e.updateAreasZones()
+	e.app.SyncVarEditor()
 }
 
 // CommitChanges triggers a snapshot to commit changes and create a patch between two map states.

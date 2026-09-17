@@ -200,8 +200,7 @@ func (p *Project) AddSlot(themeIndex int, id, name string, origin util.Point, sh
 	p.Hull.Modules = append(p.Hull.Modules, module)
 	// The first upgrade room turns a fixed ship into a modular one.
 	p.Hull.Fixed = false
-	p.reserveAnchors(hull.Map)
-	p.reserveAnchors(dst)
+
 	p.protect(hull.Map)
 	p.protect(dst)
 	return nil
@@ -397,6 +396,10 @@ func cloneHull(h Hull) Hull {
 }
 
 func (p *Project) Resize(theme Theme, w, h int) error {
+	return p.ResizeToward(theme, w, h, dmmap.ResizeNorthEast)
+}
+
+func (p *Project) ResizeToward(theme Theme, w, h int, direction dmmap.ResizeDirection) error {
 	if w < 5 || h < 5 || w > 128 || h > 128 {
 		return fmt.Errorf("canvas dimensions must be between 5 and 128")
 	}
@@ -408,8 +411,10 @@ func (p *Project) Resize(theme Theme, w, h int) error {
 	if err != nil {
 		return err
 	}
+	offset := direction.Offset(w-d.Map.MaxX, h-d.Map.MaxY)
 	for _, tile := range d.Map.Tiles {
-		if tile.Coord.X <= w && tile.Coord.Y <= h {
+		next := tile.Coord.Plus(offset)
+		if next.X >= 1 && next.Y >= 1 && next.X <= w && next.Y <= h {
 			continue
 		}
 		for _, i := range tile.Instances() {
@@ -418,10 +423,16 @@ func (p *Project) Resize(theme Theme, w, h int) error {
 			}
 		}
 	}
+	if w < d.Map.MaxX || h < d.Map.MaxY {
+		if err := p.checkResizeRooms(d.Map, theme, w, h, offset); err != nil {
+			return err
+		}
+	}
 	oldW, oldH := d.Map.MaxX, d.Map.MaxY
-	d.Map.SetMapSize(w, h, 1)
+	d.Map.Resize(w, h, 1, direction)
 	for _, tile := range d.Map.Tiles {
-		if tile.Coord.X > oldW || tile.Coord.Y > oldH {
+		prior := tile.Coord.Minus(offset)
+		if prior.X < 1 || prior.Y < 1 || prior.X > oldW || prior.Y > oldH {
 			tile.InstancesSet(dmmdata.Prefabs{dmmap.PrefabStorage.Initial("/turf/template_noop"), dmmap.PrefabStorage.Initial("/area/template_noop")})
 		}
 	}

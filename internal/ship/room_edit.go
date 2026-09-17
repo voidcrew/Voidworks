@@ -445,7 +445,7 @@ func (p *Project) RemoveSlot(themeIndex int, slot string) error {
 			restoreModule(r.hull.Map, r.module.Map, r.coord, false)
 		}
 		r.hull.Map.GetTile(r.coord).InstancesRemoveByInstance(r.marker)
-		p.reserveAnchors(r.hull.Map)
+
 		p.protect(r.hull.Map)
 	}
 	for i := len(p.Hull.Modules) - 1; i >= 0; i-- {
@@ -594,7 +594,7 @@ func (p *Project) ReshapeSlot(themeIndex int, slot string, origin util.Point, sh
 	}
 	for _, o := range options {
 		reshapeModule(o.doc.Map, util.Point{X: o.from.X - origin.X, Y: o.from.Y - origin.Y}, shape.W, shape.H)
-		p.reserveAnchors(o.doc.Map)
+
 		p.protect(o.doc.Map)
 	}
 	added := map[util.Point]bool{}
@@ -613,7 +613,7 @@ func (p *Project) ReshapeSlot(themeIndex int, slot string, origin util.Point, sh
 		}
 		mk.doc.Map.GetTile(old.Marker).InstancesRemoveByInstance(mk.marker)
 		mk.doc.Map.GetTile(origin).InstancesAdd(p.markerPrefab(slot, shape))
-		p.reserveAnchors(mk.doc.Map)
+
 		p.protect(mk.doc.Map)
 	}
 	return nil

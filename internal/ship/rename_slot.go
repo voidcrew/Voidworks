@@ -153,7 +153,7 @@ func (p *Project) RenameSlot(slot, name string) (string, error) {
 				}
 			}
 		}
-		p.reserveAnchors(h.doc.Map)
+
 		p.protect(h.doc.Map)
 	}
 	replace := func(values []string) {

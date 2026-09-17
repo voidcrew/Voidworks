@@ -3,6 +3,7 @@ package psettings
 import (
 	"fmt"
 	"math"
+	"sdmm/internal/dmapi/dmmap"
 
 	"sdmm/internal/imguiext"
 	"sdmm/internal/imguiext/style"
@@ -20,6 +21,7 @@ const (
 
 type sessionMapSize struct {
 	maxX, maxY, maxZ int32
+	direction        dmmap.ResizeDirection
 }
 
 func (s sessionMapSize) String() string {
@@ -62,6 +64,17 @@ func (p *Panel) showMapSize() {
 		imgui.SetNextItemWidth(-1)
 		imguiext.InputIntClamp("##max_z", &p.sessionMapSize.maxZ, 1, possibleMaxZ, 1, 10)
 
+		imgui.Text("Add/remove space at")
+		imgui.SetNextItemWidth(-1)
+		if imgui.BeginCombo("##resize_direction", p.sessionMapSize.direction.String()) {
+			for direction := dmmap.ResizeNorthEast; direction <= dmmap.ResizeSouthWest; direction++ {
+				if imgui.SelectableV(direction.String(), direction == p.sessionMapSize.direction, 0, imgui.Vec2{}) {
+					p.sessionMapSize.direction = direction
+				}
+			}
+			imgui.EndCombo()
+		}
+
 		imgui.Separator()
 
 		w.Button("Set", p.doSetMapSize).
@@ -76,7 +89,7 @@ func (p *Panel) showMapSize() {
 func (p *Panel) doSetMapSize() {
 	log.Printf("do set map size [%s]: %v", p.editor.Dmm().Name, p.sessionMapSize)
 	oldMaxX, oldMaxY, oldMaxZ := p.editor.Dmm().MaxX, p.editor.Dmm().MaxY, p.editor.Dmm().MaxZ
-	p.editor.Dmm().SetMapSize(int(p.sessionMapSize.maxX), int(p.sessionMapSize.maxY), int(p.sessionMapSize.maxZ))
+	p.editor.Dmm().Resize(int(p.sessionMapSize.maxX), int(p.sessionMapSize.maxY), int(p.sessionMapSize.maxZ), p.sessionMapSize.direction)
 	p.editor.CommitMapSizeChange(oldMaxX, oldMaxY, oldMaxZ)
 	p.sessionMapSize = nil
 }

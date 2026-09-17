@@ -88,7 +88,21 @@ func (v *VarEditor) Sync() {
 		return
 	}
 	e := v.app.CurrentEditor()
-	if e == nil || (v.instance != nil && !e.Dmm().IsInstanceExist(v.instance.Id())) {
+	if e != nil && v.instance != nil {
+		// Resize and history restore replace instances while retaining IDs.
+		// Follow the live instance so edits use its new tile coordinates.
+		for _, tile := range e.Dmm().Tiles {
+			for _, instance := range tile.Instances() {
+				if instance.Id() == v.instance.Id() {
+					if instance != v.instance {
+						v.EditInstance(instance)
+					}
+					return
+				}
+			}
+		}
+	}
+	if e == nil || v.instance != nil {
 		v.instance = nil
 		v.sessionEditMode = emPrefab
 	}

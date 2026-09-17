@@ -190,7 +190,7 @@ func (p *Project) document(file string) (*Document, error) {
 	// Like an ordinary map tab, a ship still opens when the environment lacks
 	// some of its types. Unlike one, those atoms are kept and saved unchanged.
 	keepUnknownPrefabs(m, data, unknown)
-	p.reserveAnchors(m)
+
 	p.protect(m)
 	d := &Document{Map: m, Initial: data, Before: before, Existed: true, Active: true, Unknown: sortedPaths(unknown), fingerprint: fingerprint(m)}
 	p.Documents[file] = d
@@ -236,16 +236,6 @@ func (p *Project) protect(m *dmmap.Dmm) {
 		tile.DefaultTurf = dmmap.PrefabStorage.Initial("/turf/template_noop")
 		tile.DefaultArea = dmmap.PrefabStorage.Initial("/area/template_noop")
 		tile.InstancesRegenerate()
-	}
-}
-func (p *Project) reserveAnchors(m *dmmap.Dmm) {
-	for _, tile := range m.Tiles {
-		tile.Reserved = nil
-		for _, i := range tile.Instances() {
-			if mappingMarker(i.Prefab().Path()) {
-				tile.Reserved = append(tile.Reserved, i.Prefab())
-			}
-		}
 	}
 }
 
@@ -368,7 +358,7 @@ func (p *Project) addMap(file string, data *dmmdata.DmmData) error {
 	data.Filepath = file
 	m, unknown := dmmap.New(p.Dme, data, "")
 	keepUnknownPrefabs(m, data, unknown)
-	p.reserveAnchors(m)
+
 	p.protect(m)
 	if prior := p.Documents[file]; prior != nil {
 		*prior.Map = *m

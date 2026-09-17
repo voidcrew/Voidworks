@@ -375,13 +375,23 @@ func (ws *WsShip) authorControls() {
 		hint("Add room to build. Shrinking is allowed only where the canvas is empty.")
 		numberField("Width in tiles", &ws.width)
 		numberField("Height in tiles", &ws.height)
+		if combo("Add/remove space at", ws.resizeDirection.String()) {
+			for direction := dmmap.ResizeNorthEast; direction <= dmmap.ResizeSouthWest; direction++ {
+				if imgui.SelectableV(direction.String(), direction == ws.resizeDirection, 0, imgui.Vec2{}) {
+					ws.resizeDirection = direction
+				}
+			}
+			imgui.EndCombo()
+		}
 		valid := ws.width >= 5 && ws.height >= 5 && ws.width <= 128 && ws.height <= 128
 		if !valid {
 			hint("Use 5 to 128 tiles in each direction.")
 		}
 		imgui.BeginDisabledV(!valid)
 		if actionButton("Apply canvas size", true) {
-			ws.change("Resize hull", func() error { return ws.project.Resize(ws.currentTheme(), int(ws.width), int(ws.height)) })
+			ws.change("Resize hull", func() error {
+				return ws.project.ResizeToward(ws.currentTheme(), int(ws.width), int(ws.height), ws.resizeDirection)
+			})
 			if ws.message == "" {
 				ws.finishTask()
 				ws.pane.FitView()

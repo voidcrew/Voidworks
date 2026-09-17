@@ -235,7 +235,7 @@ func RecoverProject(c *Catalog, dme *dmenv.Dme, data []byte) (*Project, error) {
 	for path, v := range r.Documents {
 		m, unknown := dmmap.New(dme, raw[path], "")
 		keepUnknownPrefabs(m, raw[path], unknown)
-		p.reserveAnchors(m)
+
 		p.protect(m)
 		p.Documents[path] = &Document{Map: m, Initial: initial[path], Active: v.Active, Existed: v.Existed, Before: v.Before, fingerprint: v.Fingerprint, Unknown: sortedPaths(unknown)}
 	}
