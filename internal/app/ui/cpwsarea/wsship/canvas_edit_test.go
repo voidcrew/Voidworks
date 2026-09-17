@@ -18,6 +18,23 @@ func exerciseHelperMovesAndResize(t *testing.T, ws *WsShip, capture func(string)
 	ws.rebuild()
 	ws.OnFocusChange(true)
 	original := ship.RawData(ws.pane.Dmm()).EncodeTGM()
+	checkAreaBorders := func() {
+		t.Helper()
+		m := ws.pane.Dmm()
+		for _, zone := range ws.pane.Editor().AreasZones() {
+			for _, border := range zone.Borders {
+				found := false
+				if m.HasTile(border.Coord) {
+					for _, instance := range m.GetTile(border.Coord).Instances() {
+						found = found || instance.Prefab().Path() == zone.Name
+					}
+				}
+				if !found {
+					t.Fatalf("area outline for %s stayed at old coordinates %v", zone.Name, border.Coord)
+				}
+			}
+		}
+	}
 	find := func() *dmminstance.Instance {
 		for _, tile := range ws.pane.Dmm().Tiles {
 			for _, instance := range tile.Instances() {
@@ -86,12 +103,15 @@ func exerciseHelperMovesAndResize(t *testing.T, ws *WsShip, capture func(string)
 		t.Fatal("south/west resize did not move the room with its hull", ws.message)
 	}
 	capture("resized-south-west")
+	checkAreaBorders()
 	for range 2 {
 		ws.app.CommandStorage().Undo()
+		checkAreaBorders()
 		if !bytes.Equal(original, ship.RawData(ws.pane.Dmm()).EncodeTGM()) {
 			t.Fatal("resize undo changed the original hull")
 		}
 		ws.app.CommandStorage().Redo()
+		checkAreaBorders()
 		if ws.assembly.Markers["cargo"] != start.Plus(util.Point{X: 3, Y: 5}) {
 			t.Fatal("resize redo shifted the room incorrectly")
 		}

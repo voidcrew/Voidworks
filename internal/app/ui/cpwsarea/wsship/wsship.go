@@ -549,6 +549,7 @@ func (ws *WsShip) change(label string, action func() error) {
 		}
 		for _, pane := range ws.panes {
 			pane.Snapshot().Sync()
+			pane.Editor().RefreshAreaZones()
 			pane.CanvasState().SetMaxX(pane.Dmm().MaxX)
 			pane.CanvasState().SetMaxY(pane.Dmm().MaxY)
 		}
@@ -566,6 +567,7 @@ func (ws *WsShip) change(label string, action func() error) {
 	}
 	for _, pane := range ws.panes {
 		pane.Snapshot().Sync()
+		pane.Editor().RefreshAreaZones()
 		pane.CanvasState().SetMaxX(pane.Dmm().MaxX)
 		pane.CanvasState().SetMaxY(pane.Dmm().MaxY)
 	}
