@@ -35,6 +35,8 @@ type Module struct {
 
 type Hull struct {
 	Type, Name, Prefix, Port, Suffix string
+	Description                      string `json:",omitempty"`
+	Hidden                           bool   `json:",omitempty"`
 	Slots                            []string
 	Themes                           []Theme
 	Modules                          []Module
@@ -268,13 +270,14 @@ func Discover(dme *dmenv.Dme) (*Catalog, error) {
 			themes[forShip] = append(themes[forShip], Theme{ID: id, Name: text(v, "name"), Description: description(v), Suffix: text(v, "template_suffix"), Slots: slots, Default: v.IntV("is_default", 0) != 0})
 		}
 	}
+	allHulls := map[string]Hull{}
 	for _, path := range paths {
 		if !strings.HasPrefix(path, HullType+"/") {
 			continue
 		}
 		obj := dme.Objects[path]
 		v := obj.Vars
-		if v.ValueV("abstract", "") == path || v.IntV("player_hidden", 0) != 0 {
+		if v.ValueV("abstract", "") == path {
 			continue
 		}
 		// List registered base hulls once, rather than every inherited theme
@@ -294,20 +297,28 @@ func Discover(dme *dmenv.Dme) (*Catalog, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s slots: %w", path, err)
 		}
-		h := Hull{Type: path, Name: text(v, "name"), Prefix: text(v, "prefix"), Port: text(v, "port_id"), Suffix: text(v, "suffix"), Slots: slots, Themes: themes[path], Modules: modules[path], Fixed: fixed}
+		h := Hull{Type: path, Name: text(v, "name"), Description: text(v, "catalog_desc"), Hidden: v.IntV("player_hidden", 0) != 0, Prefix: text(v, "prefix"), Port: text(v, "port_id"), Suffix: text(v, "suffix"), Slots: slots, Themes: themes[path], Modules: modules[path], Fixed: fixed}
 		sort.SliceStable(h.Themes, func(i, j int) bool {
 			if h.Themes[i].Default != h.Themes[j].Default {
 				return h.Themes[i].Default
 			}
 			return h.Themes[i].Name < h.Themes[j].Name
 		})
-		c.Hulls = append(c.Hulls, h)
+		allHulls[h.Type] = h
+		if !h.Hidden {
+			c.Hulls = append(c.Hulls, h)
+		}
 	}
 	// Draft projects remain available even while hidden from the purchase screen.
 	projects, err := filepath.Glob(filepath.Join(c.Root, "voidcrew", "mapping", "ship_projects", "*.ship.json"))
 	if err != nil {
 		return nil, err
 	}
+	info, err := filepath.Glob(filepath.Join(c.Root, "voidcrew", "mapping", "ship_projects", "*.shipinfo.json"))
+	if err != nil {
+		return nil, err
+	}
+	projects = append(projects, info...)
 	for _, path := range projects {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -320,8 +331,15 @@ func Discover(dme *dmenv.Dme) (*Catalog, error) {
 		if err = ValidID(s.ID); err != nil {
 			return nil, err
 		}
-		if s.Version != 1 || s.Hull.Type != HullType+"/"+s.ID {
+		if (s.Version != 1 && s.Version != 2) || s.Version == 1 && s.Hull.Type != HullType+"/"+s.ID {
 			return nil, fmt.Errorf("unsupported project %s", path)
+		}
+		if s.Version == 2 {
+			loaded, ok := allHulls[s.Hull.Type]
+			if !ok {
+				return nil, fmt.Errorf("ship definition missing for %s", s.Hull.Type)
+			}
+			s.Hull = loaded
 		}
 		found := false
 		for i, h := range c.Hulls {

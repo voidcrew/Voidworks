@@ -32,6 +32,7 @@ const (
 	taskRenameModule
 	taskReshape
 	taskRenameRoom
+	taskRenameShip
 )
 
 // usesShapeTool reports the tasks that collect room tiles on the hull canvas.
@@ -260,7 +261,7 @@ func (ws *WsShip) beginTask(task buildTask) {
 		}
 	}
 	if task == taskSettings {
-		s := ws.project.Settings
+		s := ws.project.ShipDetails()
 		costs, err := ws.project.PartCosts("ship")
 		if err != nil {
 			ws.message = err.Error()
@@ -366,13 +367,13 @@ func (ws *WsShip) authorControls() {
 		ws.dockingControls()
 	case taskTheme, taskModule:
 		ws.copyControls()
-	case taskRenameTheme, taskRenameModule, taskRenameRoom:
+	case taskRenameTheme, taskRenameModule, taskRenameRoom, taskRenameShip:
 		ws.renameControls()
 	case taskSettings:
 		ws.settingsControls()
 	case taskResize:
 		heading("CHANGE CANVAS SIZE")
-		hint("Add room to build. Shrinking is allowed only where the canvas is empty.")
+		hint("Add module to build. Shrinking is allowed only where the canvas is empty.")
 		numberField("Width in tiles", &ws.width)
 		numberField("Height in tiles", &ws.height)
 		if combo("Add/remove space at", ws.resizeDirection.String()) {
@@ -403,15 +404,15 @@ func (ws *WsShip) authorControls() {
 
 func (ws *WsShip) regionControls() {
 	if ws.task == taskReshape {
-		heading("CHANGE ROOM SHAPE")
-		hint(ship.SlotDisplayName(ws.reshapeSlot) + ": tiles leaving the room must be empty in every option.")
+		heading("CHANGE MODULE SHAPE")
+		hint(ship.SlotDisplayName(ws.reshapeSlot) + ": tiles leaving the module must be empty in every option.")
 	} else {
-		heading("MAKE AN UPGRADE ROOM")
-		hint("Turn a furnished room into a swappable upgrade. Its walls and floor stay in the hull.")
+		heading("MAKE AN UPGRADE MODULE")
+		hint("Turn a furnished module into a swappable upgrade. Its walls and floor stay in the hull.")
 	}
 	if ws.project != nil && ws.project.Hull.Fixed && ws.task == taskRoom && !ws.fixedConfirmed[ws.project.Hull.Type] {
 		space()
-		imgui.TextWrapped("This turns " + ws.project.Hull.Name + " into a modular ship: its walls stay in the hull, the furniture in the selected tiles moves into the room's first option, and the ship becomes purchasable in the shipyard.")
+		imgui.TextWrapped("This turns " + ws.project.Hull.Name + " into a modular ship: its walls stay in the hull, the furniture in the selected tiles moves into the module's first option, and the ship becomes purchasable in the shipyard.")
 		space()
 		if actionButton("Continue", true) {
 			if ws.fixedConfirmed == nil {
@@ -434,16 +435,16 @@ func (ws *WsShip) regionControls() {
 	shape, _, shapeErr := ship.FootprintFromTiles(tiles)
 	supported := ws.project == nil || ws.project.SupportsFootprints()
 	if len(tiles) == 0 {
-		hint("Click hull tiles to add them to the room.")
+		hint("Click hull tiles to add them to the module.")
 	} else {
 		imgui.Text(fmt.Sprintf("%d tiles selected, %d x %d box", len(tiles), shape.W, shape.H))
 		if !shape.Connected() {
-			imgui.TextColored(style.Amber, "Room is in two pieces")
+			imgui.TextColored(style.Amber, "Module is in two pieces")
 		}
 	}
 	hint("Drag to paint  |  Shift+drag adds a box  |  Alt+drag removes a box")
 	if !supported {
-		hint("This project's game code does not support custom room shapes yet. Rooms must be rectangles.")
+		hint("This project's game code does not support custom module shapes yet. Modules must be rectangles.")
 	}
 	if reason := tools.RoomShapeRejection(); reason != "" {
 		imgui.PushStyleColor(imgui.StyleColorText, style.Amber)
@@ -455,9 +456,9 @@ func (ws *WsShip) regionControls() {
 			if actionButton("Use Grab selection", false) {
 				ws.importGrabSelection()
 			}
-			tooltip("Adds the Grab rectangle to the room's tiles.")
+			tooltip("Adds the Grab rectangle to the module's tiles.")
 		}
-		if actionButton("Select room tiles", false) {
+		if actionButton("Select module tiles", false) {
 			tools.SetSelected(tools.TNRoomShape)
 		}
 	} else if len(tiles) > 0 && actionButton("Clear tiles", false) {
@@ -466,14 +467,14 @@ func (ws *WsShip) regionControls() {
 	valid := shapeErr == nil && (supported || shape.IsFull())
 	label := "Apply new shape"
 	if ws.task == taskRoom {
-		textField("Room name", "e.g. Cargo bay", &ws.itemName)
+		textField("Module name", "e.g. Cargo bay", &ws.itemName)
 		ws.itemIdentifier()
 		nameErr := ws.project.ModuleNameError(ws.itemName)
 		valid = valid && nameErr == nil && ship.ValidID(ws.itemID) == nil && !ws.itemIDUsed(ws.itemID)
 		if strings.TrimSpace(ws.itemName) != "" && nameErr != nil {
 			hint(nameErr.Error())
 		}
-		label = "Create room"
+		label = "Create module"
 	}
 	space()
 	imgui.BeginDisabledV(!valid)
@@ -487,19 +488,19 @@ func (ws *WsShip) regionControls() {
 func (ws *WsShip) applyRegion() {
 	shape, origin, err := ship.FootprintFromTiles(tools.RoomShapeTiles())
 	if err != nil || ws.source != 0 || ws.pane == nil {
-		ws.message = "Select the room's tiles on the hull first."
+		ws.message = "Select the module's tiles on the hull first."
 		return
 	}
 	if ws.task == taskReshape {
 		slot := ws.reshapeSlot
-		ws.change("Change room shape", func() error { return ws.project.ReshapeSlot(ws.theme, slot, origin, shape) })
+		ws.change("Change module shape", func() error { return ws.project.ReshapeSlot(ws.theme, slot, origin, shape) })
 		if ws.message == "" {
 			ws.finishTask()
 			ws.editRoom(slot)
 		}
 		return
 	}
-	ws.change("Make upgrade room", func() error {
+	ws.change("Make upgrade module", func() error {
 		return ws.project.AddSlot(ws.theme, ws.itemID, strings.TrimSpace(ws.itemName), origin, shape)
 	})
 	if ws.message == "" {
@@ -637,30 +638,30 @@ func (ws *WsShip) itemIdentifier() {
 	}
 }
 func (ws *WsShip) copyControls() {
-	label := "Create ship variant"
+	label := "Create ship theme"
 	if ws.task == taskTheme {
-		heading("NEW SHIP VARIANT")
-		hint("Another hull of this ship, with its own rooms, crew and price.")
-		textField("Variant name", "e.g. Salvager", &ws.itemName)
+		heading("NEW SHIP THEME")
+		hint("Another hull of this ship, with its own modules, crew and price.")
+		textField("Theme name", "e.g. Salvager", &ws.itemName)
 	} else {
-		heading("NEW ROOM OPTION")
-		hint("Create another option for the room you are editing.")
-		textField("Room option name", "e.g. Medical bay", &ws.itemName)
-		imgui.Checkbox("Start with an empty room", &ws.emptyModule)
-		hint("Otherwise, the current room's contents are copied.")
-		label = "Create room option"
+		heading("NEW MODULE OPTION")
+		hint("Create another option for the module you are editing.")
+		textField("Module option name", "e.g. Medical bay", &ws.itemName)
+		imgui.Checkbox("Start with an empty module", &ws.emptyModule)
+		hint("Otherwise, the current module's contents are copied.")
+		label = "Create module option"
 	}
 	descriptionField(&ws.itemDescription)
 	if ws.task == taskTheme {
-		imgui.Text("Rooms")
+		imgui.Text("Modules")
 		if imgui.RadioButton("Share with the ship", !ws.copyRooms) {
 			ws.copyRooms = false
 		}
-		hint("Recommended. Edits to shared rooms show in every variant that shares them.")
-		if imgui.RadioButton("Copy every room", ws.copyRooms) {
+		hint("Recommended. Edits to shared modules show in every theme that shares them.")
+		if imgui.RadioButton("Copy every module", ws.copyRooms) {
 			ws.copyRooms = true
 		}
-		hint("This variant gets its own copy of each room file.")
+		hint("This theme gets its own copy of each module file.")
 	}
 	ws.itemIdentifier()
 	nameErr := ws.project.ModuleNameError(ws.itemName)
@@ -692,7 +693,7 @@ func (ws *WsShip) copyControls() {
 			slot := ws.assembly.Sources[ws.source].Slot
 			for _, m := range ws.project.Hull.Modules {
 				if m.ID == ws.selected[slot] {
-					ws.change("Create room option", func() error {
+					ws.change("Create module option", func() error {
 						if err := ws.project.AddModule(ws.theme, m, ws.itemID, strings.TrimSpace(ws.itemName), ws.emptyModule); err != nil {
 							return err
 						}
@@ -718,7 +719,7 @@ func (ws *WsShip) copyControls() {
 
 // createVariant adds the variant the form describes and opens it for editing.
 func (ws *WsShip) createVariant() {
-	ws.change("Create ship variant", func() error {
+	ws.change("Create ship theme", func() error {
 		if err := ws.project.AddTheme(ws.theme, ws.itemID, strings.TrimSpace(ws.itemName), ws.copyRooms); err != nil {
 			return err
 		}
@@ -752,7 +753,7 @@ func (ws *WsShip) settingsControls() {
 		imgui.EndTable()
 	}
 	hint(s.costs.Summary())
-	if ws.project.Crew == nil {
+	if ws.project.Settings != nil && ws.project.Crew == nil {
 		numberField("Starting crew capacity", &s.crew)
 	} else {
 		hint("Crew capacity is set by the slots in Crew & equipment.")
@@ -761,7 +762,7 @@ func (ws *WsShip) settingsControls() {
 	hint("Check this to hide an unfinished ship.")
 	nameErr := ship.ShipNameError(ws.catalog, ws.app.LoadedEnvironment(), s.name, ws.project.Hull.Type)
 	costErr := s.costs.Validate()
-	valid := nameErr == nil && costErr == nil && s.crew >= 1 && s.crew <= 32
+	valid := nameErr == nil && costErr == nil && (ws.project.Settings == nil || s.crew >= 1 && s.crew <= 32)
 	if costErr != nil {
 		hint(costErr.Error())
 	}
@@ -782,10 +783,10 @@ func (ws *WsShip) settingsControls() {
 }
 
 func (ws *WsShip) settingsPending() bool {
-	if ws.task != taskSettings || ws.project == nil || ws.project.Settings == nil {
+	if ws.task != taskSettings || ws.project == nil {
 		return false
 	}
-	s, original := ws.settings, ws.project.Settings
+	s, original := ws.settings, ws.project.ShipDetails()
 	costs, err := ws.project.PartCosts("ship")
 	return err != nil || strings.TrimSpace(s.name) != ws.project.Hull.Name || s.description != original.Description || int(s.crew) != original.Crew || s.hidden != original.Hidden || !s.costs.Equal(costs)
 }
@@ -799,7 +800,7 @@ func (ws *WsShip) commitSettings() bool {
 		ws.message = err.Error()
 		return false
 	}
-	if s.crew < 1 || s.crew > 32 {
+	if ws.project.Settings != nil && (s.crew < 1 || s.crew > 32) {
 		ws.message = "Enter 1 to 32 crew."
 		return false
 	}
@@ -811,9 +812,7 @@ func (ws *WsShip) commitSettings() bool {
 		if err := ws.project.SetPartCosts("ship", s.costs); err != nil {
 			return err
 		}
-		settings := ws.project.Settings
-		settings.Description, settings.Crew, settings.Hidden = s.description, int(s.crew), s.hidden
-		return nil
+		return ws.project.SetShipDetails(ship.ShipDetails{Description: s.description, Crew: int(s.crew), Hidden: s.hidden})
 	})
 	if ws.message != "" {
 		return false

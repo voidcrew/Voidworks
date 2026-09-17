@@ -11,26 +11,26 @@ import (
 func (ws *WsShip) roomCrewCopyControls() {
 	c := &ws.crew
 	if !ws.project.SupportsRoomCrewVariants() {
-		hint("Update the game project to edit room crew separately for each variant.")
+		hint("Update the game project to edit module crew separately for each theme.")
 		return
 	}
 	if len(c.copySources) == 0 {
 		return
 	}
-	if actionButton("Copy job from variant...", false) && ws.commitCrew() {
+	if actionButton("Copy job from theme...", false) && ws.commitCrew() {
 		c.copyOpen = true
 	}
 	if c.copyOpen {
-		imgui.OpenPopup("Copy room job")
+		imgui.OpenPopup("Copy module job")
 	}
 	viewport := imgui.MainViewport()
 	width := min(460*window.PointSize(), max(1, viewport.WorkSize().X-32))
 	imgui.SetNextWindowPosV(viewport.WorkCenter(), imgui.ConditionAlways, imgui.Vec2{X: .5, Y: .5})
 	imgui.SetNextWindowSize(imgui.Vec2{X: width})
 	imgui.SetNextWindowSizeConstraints(imgui.Vec2{X: width}, imgui.Vec2{X: width, Y: max(1, viewport.WorkSize().Y-32)})
-	if imgui.BeginPopupModalV("Copy room job", &c.copyOpen, imgui.WindowFlagsNoMove|imgui.WindowFlagsAlwaysAutoResize) {
+	if imgui.BeginPopupModalV("Copy module job", &c.copyOpen, imgui.WindowFlagsNoMove|imgui.WindowFlagsAlwaysAutoResize) {
 		source := c.copySources[c.copyVariant]
-		if combo("From variant", source.Theme.Name) {
+		if combo("From theme", source.Theme.Name) {
 			for i, candidate := range c.copySources {
 				if imgui.SelectableV(candidate.Theme.Name, i == c.copyVariant, 0, imgui.Vec2{}) {
 					c.copyVariant, c.copyJob = i, 0
@@ -77,7 +77,7 @@ func (ws *WsShip) copyRoomCrewJob(source string, index int) bool {
 	module, theme := ship.RoomCrewIDs(ws.crew.scope)
 	selected := -1
 	ws.message = ""
-	ws.change("Copy room job", func() (err error) {
+	ws.change("Copy module job", func() (err error) {
 		selected, err = ws.project.CopyRoomCrewJob(module, source, theme, index)
 		return err
 	})

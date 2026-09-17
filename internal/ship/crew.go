@@ -63,7 +63,7 @@ func (p *Project) baseCrewScopes() []CrewScope {
 		if existing := themes[t.ID]; existing != "" {
 			path = existing
 		}
-		scopes = append(scopes, CrewScope{"theme/" + t.ID, "Variant: " + t.Name, path, "job_slots"})
+		scopes = append(scopes, CrewScope{"theme/" + t.ID, "Theme: " + t.Name, path, "job_slots"})
 	}
 	for _, m := range p.Hull.Modules {
 		path := "/datum/ship_upgrade_module/" + id + "_" + m.ID
@@ -73,7 +73,7 @@ func (p *Project) baseCrewScopes() []CrewScope {
 		if existing := modules[m.ID]; existing != "" {
 			path = existing
 		}
-		scopes = append(scopes, CrewScope{"module/" + m.ID, "Room option: " + m.Name, path, "job_slots_add"})
+		scopes = append(scopes, CrewScope{"module/" + m.ID, "Module option: " + m.Name, path, "job_slots_add"})
 	}
 	return scopes
 }
@@ -121,7 +121,7 @@ func (p *Project) CrewScopesForTheme(theme Theme) []CrewScope {
 func (p *Project) crewScope(id string) (CrewScope, error) {
 	if module, theme := RoomCrewIDs(id); theme != "" {
 		if p.themeIndex(theme) < 0 {
-			return CrewScope{}, fmt.Errorf("crew variant no longer exists")
+			return CrewScope{}, fmt.Errorf("crew theme no longer exists")
 		}
 		s, err := p.crewScope("module/" + module)
 		s.ID, s.Field = id, roomCrewField
@@ -375,7 +375,7 @@ func (p *Project) ValidateCrew(jobs []CrewJob) error {
 func (p *Project) SetCrewJobs(scope string, jobs []CrewJob) error {
 	module, theme := RoomCrewIDs(scope)
 	if theme != "" && !p.SupportsRoomCrewVariants() {
-		return fmt.Errorf("this game project needs per-variant room crew support")
+		return fmt.Errorf("this game project needs per-theme module crew support")
 	}
 	if theme != "" && !p.hasRoomCrewVariant(module, theme) {
 		// Legacy room crew supplies the initial values, never shared outfit IDs.
@@ -473,7 +473,7 @@ func (p *Project) SetCrewJobs(scope string, jobs []CrewJob) error {
 						return err
 					}
 					if renderRoomCrew(source, p) != renderRoomCrew(loaded, p) {
-						return fmt.Errorf("room crew differs from the loaded environment; reload before editing")
+						return fmt.Errorf("module crew differs from the loaded environment; reload before editing")
 					}
 				}
 			}
@@ -712,7 +712,7 @@ func (p *Project) crewChanges(changes []FileChange) ([]FileChange, error) {
 			} else if p.rooms != nil {
 				file = p.generatedSourceFile(s.ID)
 			} else {
-				e = fmt.Errorf("cannot locate room crew source")
+				e = fmt.Errorf("cannot locate module crew source")
 			}
 			if e != nil {
 				return nil, e
@@ -742,7 +742,7 @@ func (p *Project) crewChanges(changes []FileChange) ([]FileChange, error) {
 		found := false
 		for i := range changes {
 			if changes[i].Path == path {
-				changes[i] = c
+				changes[i].After = b
 				found = true
 				break
 			}

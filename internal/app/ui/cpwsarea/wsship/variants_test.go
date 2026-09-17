@@ -49,10 +49,10 @@ func TestThemeDetail(t *testing.T) {
 		info ship.ThemeInfo
 		want string
 	}{
-		{"default", ship.ThemeInfo{Default: true, Slots: []string{"a", "b", "c"}, Price: "Free"}, "default  ·  3 rooms  ·  Free"},
-		{"priced", ship.ThemeInfo{Slots: []string{"a", "b", "c", "d"}, Price: "12 science parts", Crew: 6}, "4 rooms  ·  12 science parts  ·  6 crew"},
-		{"single", ship.ThemeInfo{Slots: []string{"a"}, Price: "Free", Crew: 1}, "1 room  ·  Free  ·  1 crew"},
-		{"bare", ship.ThemeInfo{}, "no rooms"},
+		{"default", ship.ThemeInfo{Default: true, Slots: []string{"a", "b", "c"}, Price: "Free"}, "default  ·  3 modules  ·  Free"},
+		{"priced", ship.ThemeInfo{Slots: []string{"a", "b", "c", "d"}, Price: "12 science parts", Crew: 6}, "4 modules  ·  12 science parts  ·  6 crew"},
+		{"single", ship.ThemeInfo{Slots: []string{"a"}, Price: "Free", Crew: 1}, "1 module  ·  Free  ·  1 crew"},
+		{"bare", ship.ThemeInfo{}, "no modules"},
 	} {
 		if got := themeDetail(c.info); got != c.want {
 			t.Fatalf("%s: %q", c.name, got)
@@ -206,7 +206,7 @@ func exerciseVariantsPanel(t *testing.T, ws *WsShip, render func()) {
 	if summaryErr != "" {
 		t.Fatal(summaryErr)
 	}
-	if detail := themeDetail(info); !strings.Contains(detail, "room") {
+	if detail := themeDetail(info); !strings.Contains(detail, "module") {
 		t.Fatalf("variant detail: %q", detail)
 	}
 	status := func(id string) ship.OptionStatus {
@@ -278,7 +278,7 @@ func exerciseVariantsPanel(t *testing.T, ws *WsShip, render func()) {
 	if got := statusText("cargo_basic"); got != "Own copy" {
 		t.Fatalf("forked room status: %q", got)
 	}
-	if suffix, _ := ws.editingShare(); suffix != "(this variant)" {
+	if suffix, _ := ws.editingShare(); suffix != "(this theme)" {
 		t.Fatalf("canvas header after fork: %q", suffix)
 	}
 	ws.unforkOption("cargo_basic", added.ID)

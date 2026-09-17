@@ -12,22 +12,26 @@ import (
 // Handwritten ships keep their existing registrations. Source snapshots remain
 // fixed for the session so undo after Save can restore the original definitions.
 type roomEditing struct {
-	base         Hull
-	sources      map[string]FileChange
-	targets      map[string]string     // theme ID -> DM type; empty ID edits the base hull
-	names        map[string]nameTarget // component scope -> original name definition
-	descriptions map[string]nameTarget
-	mapFields    map[string]nameTarget
-	removals     map[string]nameTarget // module ID -> definition cut out on save
-	defaults     map[string]nameTarget // module ID -> is_default flag to rewrite
-	themeTargets map[string]nameTarget // theme ID -> definition to flag or cut out
-	themeList    nameTarget            // the hull's available_themes list
-	themeOrder   []string              // that list as the source spells it
-	themeJobs    map[string]string     // theme ID -> crew copied for a new variant
-	themeFile    string                // where new variant registrations are written
-	moduleSlots  map[string]nameTarget // option ID -> original slot assignment
-	moduleThemes map[string]moduleThemeTarget
-	code         string
+	base                Hull
+	details             nameTarget
+	portLabel           nameTarget
+	shortName, portName string
+	manifest            string
+	sources             map[string]FileChange
+	targets             map[string]string     // theme ID -> DM type; empty ID edits the base hull
+	names               map[string]nameTarget // component scope -> original name definition
+	descriptions        map[string]nameTarget
+	mapFields           map[string]nameTarget
+	removals            map[string]nameTarget // module ID -> definition cut out on save
+	defaults            map[string]nameTarget // module ID -> is_default flag to rewrite
+	themeTargets        map[string]nameTarget // theme ID -> definition to flag or cut out
+	themeList           nameTarget            // the hull's available_themes list
+	themeOrder          []string              // that list as the source spells it
+	themeJobs           map[string]string     // theme ID -> crew copied for a new variant
+	themeFile           string                // where new variant registrations are written
+	moduleSlots         map[string]nameTarget // option ID -> original slot assignment
+	moduleThemes        map[string]moduleThemeTarget
+	code                string
 }
 
 func (p *Project) roomBytes() []byte {
@@ -43,7 +47,7 @@ func (p *Project) roomTheme(index int) (Theme, error) {
 		return Theme{}, nil
 	}
 	if index < 0 || index >= len(p.Hull.Themes) {
-		return Theme{}, fmt.Errorf("choose a ship variant")
+		return Theme{}, fmt.Errorf("choose a ship theme")
 	}
 	return p.Hull.Themes[index], nil
 }
@@ -98,7 +102,7 @@ func (p *Project) newRoomModule(theme Theme, id, name, slot string) (Module, str
 	if err != nil {
 		return Module{}, "", err
 	}
-	dir := p.fileID() + "/"
+	dir := p.mapFileID() + "/"
 	if p.Settings == nil {
 		dir += "workshop/"
 	}
@@ -138,7 +142,18 @@ func (p *Project) roomTypeFile(typePath string) (string, error) {
 			return "", err
 		}
 	}
-	return Inside(p.Catalog.Root, file)
+	full, err := Inside(p.Catalog.Root, file)
+	if err != nil {
+		return "", err
+	}
+	if p.sourceMoves != nil {
+		for logical, physical := range p.sourceMoves.Saved {
+			if sameRecoveryPath(physical, full) {
+				return logical, nil
+			}
+		}
+	}
+	return full, nil
 }
 
 func (p *Project) prepareRooms(theme *Theme) error {
@@ -146,11 +161,11 @@ func (p *Project) prepareRooms(theme *Theme) error {
 		return nil
 	}
 	if p.rooms == nil {
-		id, err := p.roomID()
+		_, err := p.roomID()
 		if err != nil {
 			return err
 		}
-		code, err := Inside(p.Catalog.Root, "voidcrew/modules/ship_upgrades/workshop/"+id+".dm")
+		code, err := Inside(p.Catalog.Root, "voidcrew/modules/ship_upgrades/workshop/"+p.fileID()+".dm")
 		if err != nil {
 			return err
 		}
@@ -217,6 +232,9 @@ func (p *Project) roomChanges(changes []FileChange) ([]FileChange, error) {
 	contents := map[string][]byte{}
 	for path, source := range p.rooms.sources {
 		contents[path] = append([]byte{}, source.Before...)
+	}
+	if err := p.applyShipDetails(contents); err != nil {
+		return nil, err
 	}
 	for themeID, typePath := range p.rooms.targets {
 		// A removed variant's whole block goes; nothing is left to rewrite in it.
@@ -366,6 +384,9 @@ func (p *Project) roomChanges(changes []FileChange) ([]FileChange, error) {
 			continue
 		}
 		c.After = content
+		if path == p.rooms.manifest && content == nil {
+			c.Delete = true
+		}
 		changes = append(changes, c)
 	}
 	if len(contents[p.rooms.code]) > generated {

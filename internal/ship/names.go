@@ -43,7 +43,7 @@ func (p *Project) ModuleNameError(name string) error {
 }
 
 func (p *Project) moduleNameError(name, except string) error {
-	existing := []string{"Hull", "Empty room"}
+	existing := []string{"Hull", "Empty module", "Empty room"}
 	for _, module := range p.Hull.Modules {
 		if module.ID != except {
 			existing = append(existing, module.Name)

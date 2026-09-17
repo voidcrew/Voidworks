@@ -81,7 +81,7 @@ func (c *Catalog) Removal(dme *dmenv.Dme, h Hull, draft bool) (*RemovalPlan, err
 		} else if !os.IsNotExist(err) {
 			return nil, err
 		}
-		for _, suffix := range []string{".ship.json", ".areas.json", ".crew.json"} {
+		for _, suffix := range []string{".ship.json", ".shipinfo.json", ".areas.json", ".crew.json"} {
 			spec.Metadata = append(spec.Metadata, filepath.Join(c.Root, "voidcrew/mapping/ship_projects", fileID+suffix))
 		}
 		shipPath := strings.TrimPrefix(other.Type, HullType+"/")

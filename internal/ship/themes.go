@@ -66,7 +66,7 @@ func (p *Project) theme(id string) (Theme, error) {
 	if i := p.themeIndex(id); i >= 0 {
 		return p.Hull.Themes[i], nil
 	}
-	return Theme{}, fmt.Errorf("choose a ship variant")
+	return Theme{}, fmt.Errorf("choose a ship theme")
 }
 
 func (p *Project) inBaseThemes(id string) bool {
@@ -130,7 +130,7 @@ func (p *Project) nextThemeSuffix(id string) (string, error) {
 			stems[suffix[:cut]] = suffix[cut+1]
 		}
 	}
-	candidate := p.fileID() + "_" + id
+	candidate := p.mapFileID() + "_" + id
 	if letters > 1 && len(stems) == 1 {
 		for stem, last := range stems {
 			for c := last + 1; c <= 'z'; c++ {
@@ -190,9 +190,9 @@ func optionGaps(h Hull) map[string]string {
 				}
 			}
 			if offered == 0 {
-				gaps[t.ID+"\x00"+slot] = fmt.Sprintf("%s would have no option for the %s room", label, SlotDisplayName(slot))
+				gaps[t.ID+"\x00"+slot] = fmt.Sprintf("%s would have no option for the %s module", label, SlotDisplayName(slot))
 			} else if !defaulted {
-				gaps[t.ID+"\x00"+slot+"\x00default"] = fmt.Sprintf("%s would lose the default option of the %s room", label, SlotDisplayName(slot))
+				gaps[t.ID+"\x00"+slot+"\x00default"] = fmt.Sprintf("%s would lose the default option of the %s module", label, SlotDisplayName(slot))
 			}
 		}
 	}
@@ -287,7 +287,7 @@ func (p *Project) prepareAvailableThemes() error {
 			return err
 		}
 		if !sameIDs(current, ids) {
-			return fmt.Errorf("%s variant list differs from the loaded environment; reload the environment first", p.Hull.Name)
+			return fmt.Errorf("%s theme list differs from the loaded environment; reload the environment first", p.Hull.Name)
 		}
 		p.rooms.themeOrder = current
 	}
@@ -430,7 +430,7 @@ func (p *Project) AddTheme(baseIndex int, id, name string, copyRooms bool) error
 		return err
 	}
 	if p.themeIndex(id) >= 0 {
-		return fmt.Errorf("variant ID already exists")
+		return fmt.Errorf("theme ID already exists")
 	}
 	base, err := p.roomTheme(baseIndex)
 	if err != nil {
@@ -454,7 +454,7 @@ func (p *Project) AddTheme(baseIndex int, id, name string, copyRooms bool) error
 			return err
 		}
 		if p.Dme.Objects[roomThemeType(shipID, id)] != nil {
-			return fmt.Errorf("variant definition already exists for this identifier")
+			return fmt.Errorf("theme definition already exists for this identifier")
 		}
 		if _, err = p.themeRegistrationFile(); err != nil {
 			return err
@@ -571,14 +571,14 @@ func (p *Project) AddTheme(baseIndex int, id, name string, copyRooms bool) error
 func (p *Project) RemoveTheme(id string) error {
 	i := p.themeIndex(id)
 	if i < 0 {
-		return fmt.Errorf("ship variant no longer exists")
+		return fmt.Errorf("ship theme no longer exists")
 	}
 	theme := p.Hull.Themes[i]
 	if len(p.Hull.Themes) < 2 {
-		return fmt.Errorf("%s is the only variant; a ship needs one", theme.Name)
+		return fmt.Errorf("%s is the only theme; a ship needs one", theme.Name)
 	}
 	if theme.Default {
-		return fmt.Errorf("%s is the default variant; choose another default variant first", theme.Name)
+		return fmt.Errorf("%s is the default theme; choose another default theme first", theme.Name)
 	}
 	if p.Settings == nil {
 		if err := p.prepareRooms(nil); err != nil {
@@ -653,7 +653,7 @@ func (p *Project) RemoveTheme(id string) error {
 func (p *Project) SetDefaultTheme(id string) error {
 	i := p.themeIndex(id)
 	if i < 0 {
-		return fmt.Errorf("choose a ship variant")
+		return fmt.Errorf("choose a ship theme")
 	}
 	if p.Hull.Themes[i].Default {
 		return nil
@@ -679,12 +679,12 @@ func (p *Project) SetDefaultTheme(id string) error {
 func (p *Project) SetThemeSlots(themeID string, slots []string) error {
 	i := p.themeIndex(themeID)
 	if i < 0 {
-		return fmt.Errorf("choose a ship variant")
+		return fmt.Errorf("choose a ship theme")
 	}
 	seen := map[string]bool{}
 	for _, slot := range slots {
 		if !p.slotIDUsed(slot) {
-			return fmt.Errorf("this ship has no %s room", SlotDisplayName(slot))
+			return fmt.Errorf("this ship has no %s module", SlotDisplayName(slot))
 		}
 		if seen[slot] {
 			return fmt.Errorf("%s is listed twice", SlotDisplayName(slot))
@@ -722,15 +722,15 @@ func (p *Project) SetThemeSlots(themeID string, slots []string) error {
 func (p *Project) SetModuleThemes(moduleID string, themes []string) error {
 	i := p.moduleIndex(moduleID)
 	if i < 0 {
-		return fmt.Errorf("room option no longer exists")
+		return fmt.Errorf("module option no longer exists")
 	}
 	seen := map[string]bool{}
 	for _, id := range themes {
 		if p.themeIndex(id) < 0 {
-			return fmt.Errorf("this ship has no %q variant", id)
+			return fmt.Errorf("this ship has no %q theme", id)
 		}
 		if seen[id] {
-			return fmt.Errorf("the %s variant is listed twice", p.Hull.Themes[p.themeIndex(id)].Name)
+			return fmt.Errorf("the %s theme is listed twice", p.Hull.Themes[p.themeIndex(id)].Name)
 		}
 		seen[id] = true
 	}
@@ -763,7 +763,7 @@ func (p *Project) SetModuleThemes(moduleID string, themes []string) error {
 func (p *Project) ForkModuleForTheme(moduleID, themeID string) error {
 	i := p.moduleIndex(moduleID)
 	if i < 0 {
-		return fmt.Errorf("room option no longer exists")
+		return fmt.Errorf("module option no longer exists")
 	}
 	theme, err := p.theme(themeID)
 	if err != nil {
@@ -771,7 +771,7 @@ func (p *Project) ForkModuleForTheme(moduleID, themeID string) error {
 	}
 	m := p.Hull.Modules[i]
 	if !m.Available(themeID) {
-		return fmt.Errorf("%s is not offered in the %s variant", m.Name, theme.Name)
+		return fmt.Errorf("%s is not offered in the %s theme", m.Name, theme.Name)
 	}
 	target, err := p.themedModuleFile(m, themeID)
 	if err != nil {
@@ -787,7 +787,7 @@ func (p *Project) ForkModuleForTheme(moduleID, themeID string) error {
 		return err
 	}
 	if source == target {
-		return fmt.Errorf("%s already has its own room for the %s variant", m.Name, theme.Name)
+		return fmt.Errorf("%s already has its own module for the %s theme", m.Name, theme.Name)
 	}
 	d, err := p.document(source)
 	if err != nil {
@@ -801,7 +801,7 @@ func (p *Project) ForkModuleForTheme(moduleID, themeID string) error {
 func (p *Project) UnforkModuleForTheme(moduleID, themeID string) error {
 	i := p.moduleIndex(moduleID)
 	if i < 0 {
-		return fmt.Errorf("room option no longer exists")
+		return fmt.Errorf("module option no longer exists")
 	}
 	theme, err := p.theme(themeID)
 	if err != nil {
@@ -817,14 +817,14 @@ func (p *Project) UnforkModuleForTheme(moduleID, themeID string) error {
 		return err
 	}
 	if d == nil {
-		return fmt.Errorf("%s already uses the shared room in the %s variant", m.Name, theme.Name)
+		return fmt.Errorf("%s already uses the shared module in the %s theme", m.Name, theme.Name)
 	}
 	shared, err := p.hasSharedModuleMap(m)
 	if err != nil {
 		return err
 	}
 	if !shared {
-		return fmt.Errorf("%s has no shared room to fall back on; every variant keeps its own copy", m.Name)
+		return fmt.Errorf("%s has no shared module to fall back on; every theme keeps its own copy", m.Name)
 	}
 	d.Active = false
 	if p.deletedMaps == nil {
@@ -839,7 +839,7 @@ func (p *Project) UnforkModuleForTheme(moduleID, themeID string) error {
 func (p *Project) ModuleThemeStatus(moduleID, themeID string) (bool, bool, error) {
 	i := p.moduleIndex(moduleID)
 	if i < 0 {
-		return false, false, fmt.Errorf("room option no longer exists")
+		return false, false, fmt.Errorf("module option no longer exists")
 	}
 	if _, err := p.theme(themeID); err != nil {
 		return false, false, err

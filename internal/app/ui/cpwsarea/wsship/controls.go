@@ -171,7 +171,7 @@ func (ws *WsShip) Process() {
 func (ws *WsShip) controls() {
 	imgui.TextColored(style.Muted, "WORKSPACE")
 	labels := []string{"Choose a ship", "Build", "Review & save"}
-	details := []string{"Your fleet & new ships", "Map, rooms & crew", "Checks & project changes"}
+	details := []string{"Your fleet & new ships", "Map, modules & crew", "Checks & project changes"}
 	for i, label := range labels {
 		if ws.stage != stepChoose {
 			details[i] = ""
@@ -199,7 +199,7 @@ func (ws *WsShip) controls() {
 		imgui.PopFont()
 		hint("Ships in this project")
 		space()
-		hint("Open a ship to build its hull, configure rooms, or equip its crew.")
+		hint("Open a ship to build its hull, configure modules, or equip its crew.")
 	case stepReview:
 		heading("SAVE YOUR WORK")
 		hint("Check your changes, then save them to the project.")
@@ -265,7 +265,7 @@ func (ws *WsShip) chooseShip() {
 		case 1:
 			tooltip("Ships with upgrade slots: they are sold in the shipyard and can start rounds.")
 		case 2:
-			tooltip("Ships without upgrade slots. Make an upgrade room on one to turn it modular.")
+			tooltip("Ships without upgrade slots. Make an upgrade module on one to turn it modular.")
 		}
 	}
 	hint("Right-click a ship for removal.")
@@ -280,7 +280,7 @@ func (ws *WsShip) chooseShip() {
 			continue
 		}
 		count++
-		detail := fmt.Sprintf("%d room options   /   %d variants", len(h.Modules), len(h.Themes))
+		detail := fmt.Sprintf("%d module options   /   %d themes", len(h.Modules), len(h.Themes))
 		if h.Fixed {
 			detail = "Fixed layout   /   not modular yet"
 		}
@@ -362,18 +362,31 @@ func (ws *WsShip) buildControls() {
 	tooltip("Select an entrance with Grab (3), then place or move this ship's mobile docking port there.")
 	space()
 	heading("CONFIGURATION")
-	if workshop.Row("open-costs", "Ship & upgrade prices", "Base ship, variants & room options", ">", false, style.Amber, 0) {
+	ws.configurationActions()
+	space()
+	if actionButton("Continue to review & save", true) {
+		ws.setStage(stepReview)
+	}
+}
+
+func (ws *WsShip) configurationActions() {
+	if workshop.Row("open-details", "Edit ship details", "", ">", false, style.Teal, 0) {
+		ws.beginTask(taskSettings)
+	}
+	if workshop.Row("rename-ship", "Rename ship", "", ">", false, style.Teal, 0) {
+		ws.beginRename(taskRenameShip, "ship", ws.project.Hull.Name)
+	}
+	if workshop.Row("open-costs", "Ship & upgrade prices", "Base ship, themes & module options", ">", false, style.Amber, 0) {
 		ws.beginCosts("ship")
 	}
-	if workshop.DangerButton("Remove ship...") {
-		ws.requestRemoval(ws.project.Hull)
+	badge := ">"
+	if ws.showSources {
+		badge = "v"
 	}
-	if ws.project.Settings != nil && imgui.CollapsingHeader("Ship details") {
-		if actionButton("Edit ship details...", false) {
-			ws.beginTask(taskSettings)
-		}
+	if workshop.Row("open-sources", "Advanced view", "Source files & visibility", badge, ws.showSources, style.Teal, 0) {
+		ws.showSources = !ws.showSources
 	}
-	if imgui.CollapsingHeader("Advanced view & source files") {
+	if ws.showSources {
 		if imgui.Checkbox("Show only the part being edited", &ws.isolated) {
 			ws.flush()
 			ws.rebuild()
@@ -388,9 +401,8 @@ func (ws *WsShip) buildControls() {
 			hint(fmt.Sprintf("%d x %d tiles; placed at %d, %d", s.Data.MaxX, s.Data.MaxY, s.Offset.X, s.Offset.Y))
 		}
 	}
-	space()
-	if actionButton("Continue to review & save", true) {
-		ws.setStage(stepReview)
+	if workshop.DangerButton("Remove ship...") {
+		ws.requestRemoval(ws.project.Hull)
 	}
 }
 
@@ -423,7 +435,7 @@ func (ws *WsShip) canvasHeader() {
 	switch {
 	case ws.usesShapeTool():
 		if tools.IsSelected(tools.TNRoomShape) {
-			imgui.Text("Select the room's tiles on the hull")
+			imgui.Text("Select the module's tiles on the hull")
 		} else {
 			ws.editingText()
 		}
@@ -432,9 +444,9 @@ func (ws *WsShip) canvasHeader() {
 	case ws.hoverRoom != "" && ws.task == taskPaint:
 		name := ship.SlotDisplayName(ws.hoverRoom)
 		if ws.source == 0 {
-			imgui.Text(name + " - this room's items live in its option, not the hull.")
+			imgui.Text(name + " - this module's items live in its option, not the hull.")
 		} else {
-			imgui.Text(name + " - a different room.")
+			imgui.Text(name + " - a different module.")
 		}
 		imgui.SameLine()
 		if imgui.SmallButton("Edit " + name) {
@@ -499,9 +511,9 @@ func (ws *WsShip) editingShare() (string, string) {
 	}
 	switch {
 	case forked:
-		ws.share.suffix, ws.share.about = "(this variant)", "Only this variant uses this room."
+		ws.share.suffix, ws.share.about = "(this theme)", "Only this theme uses this module."
 	case len(m.Themes) > 1:
-		ws.share.suffix, ws.share.about = "(shared)", "Changes here affect every variant using this room."
+		ws.share.suffix, ws.share.about = "(shared)", "Changes here affect every theme using this module."
 	}
 	return ws.share.suffix, ws.share.about
 }

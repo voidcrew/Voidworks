@@ -245,7 +245,7 @@ func roomOverlap(room RoomShape, rooms map[string]RoomShape) error {
 		}
 		for tile := range other.Tiles() {
 			if tiles[tile] {
-				return fmt.Errorf("selection overlaps the %s room", SlotDisplayName(slot))
+				return fmt.Errorf("selection overlaps the %s module", SlotDisplayName(slot))
 			}
 		}
 	}
@@ -327,16 +327,18 @@ func (p *Project) AddModule(themeIndex int, base Module, id, name string, empty 
 
 // State stores authoring changes as a single history entry across every file.
 type State struct {
-	PartCosts map[string]PartCosts
-	Crew      *CrewConfig
-	Hull      Hull
-	RoomAreas []RoomArea
-	Settings  *Settings
-	Maps      map[string]dmmap.Dmm
+	SourceNames map[string]string
+	PartCosts   map[string]PartCosts
+	Crew        *CrewConfig
+	Hull        Hull
+	RoomAreas   []RoomArea
+	Settings    *Settings
+	Maps        map[string]dmmap.Dmm
 }
 
 func (p *Project) Capture() State {
 	state := State{Maps: map[string]dmmap.Dmm{}}
+	state.SourceNames = clonePaths(p.sourceNames)
 	state.Crew = cloneCrew(p.Crew)
 	state.PartCosts = cloneCostScopes(p.partCosts)
 	// JSON round-trip deep-copies nested registration slices.
@@ -354,6 +356,7 @@ func (p *Project) Capture() State {
 	return state
 }
 func (p *Project) Restore(state State) {
+	p.sourceNames = clonePaths(state.SourceNames)
 	p.partCosts = cloneCostScopes(state.PartCosts)
 	p.Crew = cloneCrew(state.Crew)
 	p.Hull = cloneHull(state.Hull)

@@ -20,7 +20,8 @@ type App interface {
 	OnWorkspaceSwitched()
 }
 type WsShip struct {
-	recovery recoveryState
+	showSources bool
+	recovery    recoveryState
 	workspace.Content
 	isolated, invalid                bool
 	app                              App

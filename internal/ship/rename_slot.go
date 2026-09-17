@@ -25,7 +25,7 @@ func renamedSlotKey(slot, name string) string {
 
 func (p *Project) RenameSlotNameError(slot, name string) error {
 	if !p.slotIDUsed(slot) {
-		return fmt.Errorf("room no longer exists")
+		return fmt.Errorf("module no longer exists")
 	}
 	existing := []string{"Hull"}
 	for other := range p.Hull.RoomSlots() {
@@ -77,7 +77,7 @@ func (p *Project) PrepareSlotRename(slot, name string) error {
 				}
 				key := text(i.Prefab().Vars(), "key")
 				if key != slot && nameKey(roomName(key)) == nameKey(roomName(next)) {
-					return fmt.Errorf("the name %q is already used by a hull room", roomName(name))
+					return fmt.Errorf("the name %q is already used by a hull module", roomName(name))
 				}
 			}
 		}

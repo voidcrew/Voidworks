@@ -156,7 +156,7 @@ func (p *Project) CostScopes() []CostScope {
 	for _, s := range crew[1:] {
 		one := CostScope{ID: s.ID, Name: s.Name, Type: s.Type, Field: "part_cost"}
 		if strings.HasPrefix(s.ID, "theme/") {
-			one.Kind = "Ship variant"
+			one.Kind = "Ship theme"
 			for _, theme := range p.Hull.Themes {
 				if s.ID == "theme/"+theme.ID {
 					one.Name, one.Default = theme.Name, theme.Default
@@ -164,7 +164,7 @@ func (p *Project) CostScopes() []CostScope {
 				}
 			}
 		} else {
-			one.Kind = "Room option"
+			one.Kind = "Module option"
 			for _, module := range p.Hull.Modules {
 				if s.ID == "module/"+module.ID {
 					one.Name, one.Default = module.Name, module.Default
@@ -278,7 +278,7 @@ func (p *Project) loadCostSource(s CostScope) (costSource, error) {
 	}
 	if p.costSources == nil {
 		var err error
-		p.costSources, err = removalSources(p.Catalog.Root, p.Dme.RootFile)
+		p.costSources, err = p.logicalSources()
 		if err != nil {
 			return costSource{}, err
 		}
@@ -422,7 +422,7 @@ func (p *Project) costChanges(changes []FileChange) ([]FileChange, error) {
 		found := false
 		for i := range changes {
 			if changes[i].Path == file {
-				changes[i] = c
+				changes[i].After = data
 				found = true
 				break
 			}

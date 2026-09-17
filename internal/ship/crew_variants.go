@@ -35,14 +35,14 @@ func parseRoomCrew(raw string) (map[string][]CrewJob, error) {
 	for _, part := range parts {
 		pair := dmSplit(part, '=')
 		if len(pair) != 2 {
-			return nil, fmt.Errorf("room crew needs a roster for each variant")
+			return nil, fmt.Errorf("module crew needs a roster for each theme")
 		}
 		id, err := dmUnquote(pair[0])
 		if err != nil || ValidID(id) != nil {
-			return nil, fmt.Errorf("invalid room crew variant %s", pair[0])
+			return nil, fmt.Errorf("invalid module crew theme %s", pair[0])
 		}
 		if _, exists := result[id]; exists {
-			return nil, fmt.Errorf("duplicate room crew variant %s", id)
+			return nil, fmt.Errorf("duplicate module crew theme %s", id)
 		}
 		jobs, err := parseCrew(pair[1])
 		if err != nil {
@@ -124,7 +124,7 @@ type RoomCrewSource struct {
 func (p *Project) RoomCrewSources(module, target string) ([]RoomCrewSource, error) {
 	i := p.moduleIndex(module)
 	if i < 0 {
-		return nil, fmt.Errorf("room option no longer exists")
+		return nil, fmt.Errorf("module option no longer exists")
 	}
 	m := p.Hull.Modules[i]
 	var sources []RoomCrewSource
@@ -147,7 +147,7 @@ func (p *Project) RoomCrewSources(module, target string) ([]RoomCrewSource, erro
 func (p *Project) CopyRoomCrewJob(module, source, target string, index int) (int, error) {
 	i, t := p.moduleIndex(module), p.themeIndex(target)
 	if i < 0 || t < 0 || !p.Hull.Modules[i].Available(target) || !Contains(p.Hull.SlotsFor(p.Hull.Themes[t]), p.Hull.Modules[i].Slot) {
-		return -1, fmt.Errorf("choose a room available in this variant")
+		return -1, fmt.Errorf("choose a module available in this theme")
 	}
 	sources, err := p.RoomCrewSources(module, target)
 	if err != nil {
@@ -183,7 +183,7 @@ func (p *Project) CopyRoomCrewJob(module, source, target string, index int) (int
 		}
 		return selected, nil
 	}
-	return -1, fmt.Errorf("choose a job from another variant")
+	return -1, fmt.Errorf("choose a job from another theme")
 }
 
 // editedCrewRosters includes independent rosters for outfit generation and IDs.
