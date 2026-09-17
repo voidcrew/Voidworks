@@ -28,8 +28,15 @@ def preview_name(name):
 
 def linked(path):
     info = path.lstat()
-    return (stat.S_ISLNK(info.st_mode)
-            or bool(getattr(info, "st_file_attributes", 0) & 0x400))  # Windows reparse points.
+    if stat.S_ISLNK(info.st_mode):
+        return True
+    if not getattr(info, "st_file_attributes", 0) & 0x400:
+        return False
+    # OneDrive's Cloud Files tags describe storage, not a path redirection.
+    # Allow CLOUD through CLOUD_F; keep rejecting junctions, symlinks and
+    # unknown reparse points, including older runtimes without tag metadata.
+    tag = getattr(info, "st_reparse_tag", 0)
+    return tag & ~0xF000 != 0x9000001A
 
 
 def preview_output(root):
@@ -251,6 +258,21 @@ class IncrementalPreviews:
         for path in self.sources:
             self.source(path)
 
+    def render_reason(self, name, previous, matching, legacy, same_context, target):
+        if self.force:
+            return "full rebuild requested"
+        if self.previous and not same_context:
+            return "preview tools or environment changed"
+        if matching or legacy:
+            if not target.exists() and not target.is_symlink():
+                return "preview file missing"
+            if not ordinary_file(target):
+                return "preview file is linked or not a regular file"
+            return "preview image changed on disk" if matching else "preview image is invalid"
+        if previous or self.legacy.get(name):
+            return "map content or source path changed"
+        return "no saved preview matches this map"
+
     def install(self):
         original_render = self.settings.get("render")
         if not callable(original_render):
@@ -321,7 +343,8 @@ class IncrementalPreviews:
         if reused:
             self.reused += 1
         else:
-            print(f"Rendering changed or missing preview: {name}", flush=True)
+            reason = self.render_reason(name, previous, matching, legacy, same_context, target)
+            print(f"Rendering changed or missing preview: {name} ({reason})", flush=True)
             self.original_render(tool, source, destination, temp, dmm)
             self.source(source)
             self.rendered += 1
@@ -409,6 +432,7 @@ def publication(folder, revision):
 
 
 def generate(root, environment, folder, force=False, approved=None, revision=0, rebuild=None, stage=None):
+    print("Preview refresh: " + ("full rebuild requested" if force else "incremental; reuse unchanged images") + ".", flush=True)
     script = root / "tools/ship_previews/generate_ship_previews.py"
     # Run the project's maintained implementation, including its smoothing fixes.
     namespace = runpy.run_path(str(script))
