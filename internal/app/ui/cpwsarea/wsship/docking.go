@@ -76,7 +76,7 @@ func (ws *WsShip) dockingControls() {
 		ws.applyDocking()
 	}
 	imgui.EndDisabled()
-	hint("Applies to this ship variant. Ctrl+Z undoes the whole change.")
+	hint("Applies to this ship theme. Ctrl+Z undoes the whole change.")
 	if imgui.CollapsingHeader("Automatic port settings") {
 		hint("Port facing, relative docking direction and travel orientation are set together. The game calculates width, height and offsets from the hull map.")
 		hint(fmt.Sprintf("Entrance tile: %d, %d", site.Position.X, site.Position.Y))

@@ -117,7 +117,7 @@ func (ws *WsShip) editRoom(slot string) {
 
 func (ws *WsShip) roomsControls() {
 	h := ws.project.Hull
-	heading("ROOMS")
+	heading("MODULES")
 	if workshop.Row("room-hull", "Hull", "Floors, walls, permanent equipment", "", ws.source == 0, style.Teal, 0) && ws.source != 0 {
 		ws.flush()
 		ws.source = 0
@@ -158,10 +158,10 @@ func (ws *WsShip) roomsControls() {
 	if h.Fixed {
 		detail = "Make this ship modular"
 	}
-	if workshop.Row("room-new", "+ Make an upgrade room", detail, "", false, style.Amber, 0) {
+	if workshop.Row("room-new", "+ Make an upgrade module", detail, "", false, style.Amber, 0) {
 		ws.beginTask(taskRoom)
 	}
-	tooltip("Select the room's tiles on the hull, then turn them into a swappable upgrade room.")
+	tooltip("Select the module's tiles on the hull, then turn them into a swappable upgrade module.")
 	ws.checksSummary()
 }
 
@@ -193,14 +193,14 @@ func smallButtonWidth(label string) float32 {
 func (ws *WsShip) optionRows(slot string, options []ship.Module) {
 	s := window.PointSize()
 	imgui.IndentV(14 * s)
-	menuWidth, roomWidth := smallButtonWidth("..."), smallButtonWidth("Room...")
+	menuWidth, roomWidth := smallButtonWidth("..."), smallButtonWidth("Module...")
 	for _, m := range options {
 		imgui.PushID("option-" + m.ID)
 		shown := ws.selected[slot] == m.ID
 		if imgui.RadioButton("##show", shown) && !shown {
 			ws.selectRoomOption(slot, m.ID)
 		}
-		tooltip("Show and edit " + m.Name + " in this room.")
+		tooltip("Show and edit " + m.Name + " in this module.")
 		imgui.SameLine()
 		label := m.Name
 		if m.Default {
@@ -232,12 +232,12 @@ func (ws *WsShip) optionRows(slot string, options []ship.Module) {
 	if imgui.SelectableV("+ Add option", false, 0, imgui.Vec2{X: imgui.ContentRegionAvail().X - roomWidth}) {
 		ws.beginAddOption(slot)
 	}
-	tooltip("Create another option for this room. Players choose one in the shipyard.")
+	tooltip("Create another option for this module. Players choose one in the shipyard.")
 	imgui.SameLine()
-	if imgui.SmallButton("Room...") {
+	if imgui.SmallButton("Module...") {
 		imgui.OpenPopup("room-menu-" + slot)
 	}
-	tooltip("Rename this room, change its shape, show the bare hull, or delete it.")
+	tooltip("Rename this module, change its shape, show the bare hull, or delete it.")
 	imgui.UnindentV(14 * s)
 }
 
@@ -255,7 +255,7 @@ func (ws *WsShip) beginAddOption(slot string) {
 
 func (ws *WsShip) roomMenu(slot string, options int) {
 	name := ship.SlotDisplayName(slot)
-	if imgui.Selectable("Rename room...") {
+	if imgui.Selectable("Rename module...") {
 		ws.beginRename(taskRenameRoom, slot, name)
 	}
 	if imgui.Selectable("Change shape...") {
@@ -282,7 +282,7 @@ func (ws *WsShip) roomMenu(slot string, options int) {
 		if imgui.Selectable("Keep it") {
 			ws.pendingDelete = ""
 		}
-	} else if imgui.SelectableV("Delete room...", false, imgui.SelectableFlagsDontClosePopups, imgui.Vec2{}) {
+	} else if imgui.SelectableV("Delete module...", false, imgui.SelectableFlagsDontClosePopups, imgui.Vec2{}) {
 		ws.pendingDelete, ws.pendingShown = key, true
 	}
 }
@@ -310,7 +310,7 @@ func (ws *WsShip) optionMenu(slot string, m ship.Module, options int) {
 	blocked := ""
 	switch {
 	case options <= 1:
-		blocked = "This is the room's only option. Delete the room instead."
+		blocked = "This is the module's only option. Delete the module instead."
 	case m.Default:
 		blocked = "Make another option the default first."
 	}
@@ -336,7 +336,7 @@ func (ws *WsShip) optionMenu(slot string, m ship.Module, options int) {
 }
 
 func (ws *WsShip) deleteRoom(slot string) {
-	ws.change("Delete room", func() error { return ws.project.RemoveSlot(ws.theme, slot) })
+	ws.change("Delete module", func() error { return ws.project.RemoveSlot(ws.theme, slot) })
 	if ws.message == "" {
 		ws.defaults()
 		ws.rebuild()
@@ -344,7 +344,7 @@ func (ws *WsShip) deleteRoom(slot string) {
 }
 
 func (ws *WsShip) deleteOption(slot, id string) {
-	ws.change("Delete room option", func() error { return ws.project.RemoveModule(id) })
+	ws.change("Delete module option", func() error { return ws.project.RemoveModule(id) })
 	if ws.message == "" {
 		if ws.selected[slot] == id {
 			ws.selected[slot] = ws.displayedOption(slot)

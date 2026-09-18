@@ -35,11 +35,11 @@ func parseMask(mask string) (Footprint, error) {
 	rows := strings.Split(mask, "/")
 	f := Footprint{W: len(rows[0]), H: len(rows), Cells: map[util.Point]bool{}}
 	if f.W == 0 {
-		return Footprint{}, fmt.Errorf("room shape is empty")
+		return Footprint{}, fmt.Errorf("module shape is empty")
 	}
 	for r, row := range rows {
 		if len(row) != f.W {
-			return Footprint{}, fmt.Errorf("room shape rows differ in width")
+			return Footprint{}, fmt.Errorf("module shape rows differ in width")
 		}
 		for i := 0; i < len(row); i++ {
 			switch row[i] {
@@ -47,12 +47,12 @@ func parseMask(mask string) (Footprint, error) {
 				f.Cells[util.Point{X: i + 1, Y: f.H - r, Z: 1}] = true
 			case '.':
 			default:
-				return Footprint{}, fmt.Errorf("room shape uses %q; use # and .", row[i])
+				return Footprint{}, fmt.Errorf("module shape uses %q; use # and .", row[i])
 			}
 		}
 	}
 	if len(f.Cells) == 0 {
-		return Footprint{}, fmt.Errorf("room shape has no tiles")
+		return Footprint{}, fmt.Errorf("module shape has no tiles")
 	}
 	return f, nil
 }
@@ -63,7 +63,7 @@ func ParseFootprint(mask string, w, h int) (Footprint, error) {
 		return Footprint{}, err
 	}
 	if f.W != w || f.H != h {
-		return Footprint{}, fmt.Errorf("room shape is %dx%d but the module is %dx%d", f.W, f.H, w, h)
+		return Footprint{}, fmt.Errorf("module shape is %dx%d but the module is %dx%d", f.W, f.H, w, h)
 	}
 	return f, nil
 }
@@ -85,15 +85,15 @@ func (f Footprint) String() string {
 
 func (f Footprint) Valid() error {
 	if f.W < 1 || f.H < 1 {
-		return fmt.Errorf("room shape is empty")
+		return fmt.Errorf("module shape is empty")
 	}
 	for cell := range f.Cells {
 		if cell.X < 1 || cell.Y < 1 || cell.X > f.W || cell.Y > f.H {
-			return fmt.Errorf("room shape tile %d,%d is outside its %dx%d box", cell.X, cell.Y, f.W, f.H)
+			return fmt.Errorf("module shape tile %d,%d is outside its %dx%d box", cell.X, cell.Y, f.W, f.H)
 		}
 	}
 	if f.Count() == 0 {
-		return fmt.Errorf("room shape has no tiles")
+		return fmt.Errorf("module shape has no tiles")
 	}
 	return nil
 }
@@ -148,7 +148,7 @@ func (f Footprint) Connected() bool {
 // its bottom-left origin.
 func FootprintFromTiles(tiles []util.Point) (Footprint, util.Point, error) {
 	if len(tiles) == 0 {
-		return Footprint{}, util.Point{}, fmt.Errorf("select the room's tiles first")
+		return Footprint{}, util.Point{}, fmt.Errorf("select the module's tiles first")
 	}
 	min, max := tiles[0], tiles[0]
 	for _, t := range tiles {
@@ -235,7 +235,7 @@ func (p *Project) footprintError(f Footprint) error {
 		return err
 	}
 	if !f.IsFull() && !p.SupportsFootprints() {
-		return fmt.Errorf("This project's game code does not support custom room shapes yet; update tg-voidcrew.")
+		return fmt.Errorf("This project's game code does not support custom module shapes yet; update tg-voidcrew.")
 	}
 	return nil
 }

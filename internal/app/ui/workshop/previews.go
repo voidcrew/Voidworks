@@ -8,12 +8,20 @@ import (
 	"sdmm/internal/shippreview"
 )
 
-func PreviewStatus(status shippreview.Status, retry func()) {
+func PreviewStatus(status shippreview.Status, retry, stop func()) {
 	if status.Phase == "" {
 		return
 	}
 	Section("PURCHASE PREVIEWS", style.Teal)
 	imgui.TextWrapped(status.Message)
+	if (status.Phase == "running" || status.Phase == "starting") && stop != nil {
+		if imgui.Button("Stop preview generation") {
+			stop()
+		}
+	}
+	if status.Phase == "stopped" && imgui.Button("Resume previews") {
+		retry()
+	}
 	if status.Phase == "failed" || status.Phase == "error" {
 		if imgui.Button("Retry previews") {
 			retry()

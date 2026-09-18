@@ -271,7 +271,7 @@ func exerciseRoomsPanel(t *testing.T, ws *WsShip, render func()) {
 		}
 		tools.SetRoomShapeTiles(corner)
 		ws.applyRegion()
-		if !strings.Contains(ws.message, "custom room shapes") {
+		if !strings.Contains(ws.message, "custom module shapes") {
 			t.Fatalf("L-shape on rectangle-only game: %q", ws.message)
 		}
 		ws.message = ""

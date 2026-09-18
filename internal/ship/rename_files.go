@@ -22,6 +22,11 @@ func readShipProject(c *Catalog, h Hull) (string, []byte, error) {
 	if e != nil {
 		return "", nil, e
 	}
+	info, e := filepath.Glob(filepath.Join(c.Root, "voidcrew/mapping/ship_projects/*.shipinfo.json"))
+	if e != nil {
+		return "", nil, e
+	}
+	matches = append(matches, info...)
 	for _, candidate := range matches {
 		b, e := os.ReadFile(candidate)
 		if e != nil {
@@ -42,8 +47,21 @@ func (p *Project) fileID() string {
 	if p.Settings != nil && p.Settings.FileID != "" {
 		return p.Settings.FileID
 	}
+	if p.loadedFileID != "" {
+		return p.loadedFileID
+	}
 	id, _ := p.roomID()
 	return id
+}
+
+// Map creation follows the current display name; source editors retain logical paths.
+func (p *Project) mapFileID() string {
+	if p.sourceMoves != nil {
+		if target := p.sourceNames[p.sourceMoves.Manifest]; target != "" {
+			return strings.TrimSuffix(filepath.Base(target), ".shipinfo.json")
+		}
+	}
+	return p.fileID()
 }
 
 func (p *Project) authoredPaths() []string {
@@ -59,10 +77,13 @@ func (p *Project) authoredPaths() []string {
 	return paths
 }
 
-func (p *Project) RenameShip(name string) error {
-	if p.Settings == nil {
-		return fmt.Errorf("ship details require an authored ship project")
-	}
+func (p *Project) RenameShip(name string) (err error) {
+	before := p.Capture()
+	defer func() {
+		if err != nil {
+			p.Restore(before)
+		}
+	}()
 	if err := ShipNameError(p.Catalog, p.Dme, name, p.Hull.Type); err != nil {
 		return err
 	}
@@ -70,11 +91,18 @@ func (p *Project) RenameShip(name string) error {
 	if p.Hull.Name == name {
 		return nil
 	}
-	oldPaths := p.authoredPaths()
-	oldID := p.Settings.FileID
-	p.Settings.FileID = fileName(name)
-	newPaths := p.authoredPaths()
-	p.Settings.FileID = oldID
+	var oldPaths, newPaths []string
+	if p.Settings == nil {
+		if err := p.prepareLoadedShipRename(name); err != nil {
+			return err
+		}
+	} else {
+		oldPaths = p.authoredPaths()
+		oldID := p.Settings.FileID
+		p.Settings.FileID = fileName(name)
+		newPaths = p.authoredPaths()
+		p.Settings.FileID = oldID
+	}
 	for i, to := range newPaths {
 		from := oldPaths[i]
 		if from == to {
@@ -131,7 +159,7 @@ func (p *Project) RenameShip(name string) error {
 	}
 	moves[oldBase] = newBase
 	for i, m := range h.Modules {
-		nextHull.Modules[i].File = fileName(name) + "/" + filepath.Base(m.File)
+		nextHull.Modules[i].File = renamedModuleFile(m.File, fileName(name))
 		for _, theme := range append([]string{""}, m.Themes...) {
 			old, next := m.File, nextHull.Modules[i].File
 			if theme != "" {
@@ -173,7 +201,13 @@ func (p *Project) RenameShip(name string) error {
 		}
 	}
 	nextHull.Name = name
-	p.Settings.FileID, p.Hull = fileName(name), nextHull
+	if p.Settings != nil {
+		p.Settings.FileID = fileName(name)
+	}
+	p.Hull = nextHull
+	if _, err := p.Changes(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -254,6 +288,11 @@ func fileName(name string) string {
 
 func (p *Project) referencedMaps() map[string]bool {
 	paths := map[string]bool{}
+	if p.sourceMoves != nil {
+		for path := range p.sourceMoves.RetainedMaps {
+			paths[path] = true
+		}
+	}
 	addHull := func(h Hull) {
 		add := func(relative string) { paths[filepath.Join(p.Catalog.Root, filepath.FromSlash(relative))] = true }
 		if h.Suffix != "" {
@@ -314,6 +353,9 @@ func (p *Project) moveMaps(moves map[string]string) error {
 			return err
 		}
 		if p.BeforeOpen != nil {
+			if err := p.BeforeOpen(from); err != nil {
+				return err
+			}
 			if err := p.BeforeOpen(to); err != nil {
 				return err
 			}
@@ -344,7 +386,7 @@ func (p *Project) moveMaps(moves map[string]string) error {
 		if prior := p.Documents[to]; prior != nil {
 			*prior.Map, prior.Active = m, true
 		} else {
-			p.Documents[to] = &Document{Map: &m, Active: true, Initial: old.Initial}
+			p.Documents[to] = &Document{Map: &m, Active: true, Initial: old.Initial, Unknown: append([]string{}, old.Unknown...)}
 		}
 		old.Active = false
 		p.renamedMaps[from], p.renamedMaps[to] = true, true
@@ -364,7 +406,7 @@ func (p *Project) renameComponentMaps(scope, name string) error {
 				return err
 			}
 			updated := t
-			id := p.fileID()
+			id := p.mapFileID()
 			updated.Suffix = id + "_" + fileName(name)
 			to, err := p.Catalog.HullFile(p.Hull, updated)
 			if err != nil {
@@ -473,4 +515,13 @@ func (p *Project) prepareMapField(scope, typePath string) error {
 	}
 	p.rooms.mapFields[scope] = nameTarget{file, typePath}
 	return nil
+}
+
+func renamedModuleFile(file, id string) string {
+	file = filepath.ToSlash(file)
+	_, rest, found := strings.Cut(file, "/")
+	if !found {
+		rest = file
+	}
+	return id + "/" + rest
 }

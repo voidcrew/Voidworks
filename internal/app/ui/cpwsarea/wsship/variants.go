@@ -73,11 +73,11 @@ func themeDetail(info ship.ThemeInfo) string {
 	}
 	switch n := len(info.Slots); n {
 	case 0:
-		parts = append(parts, "no rooms")
+		parts = append(parts, "no modules")
 	case 1:
-		parts = append(parts, "1 room")
+		parts = append(parts, "1 module")
 	default:
-		parts = append(parts, fmt.Sprintf("%d rooms", n))
+		parts = append(parts, fmt.Sprintf("%d modules", n))
 	}
 	if info.Price != "" {
 		parts = append(parts, info.Price)
@@ -204,9 +204,9 @@ func (ws *WsShip) switchTheme(i int) {
 
 func (ws *WsShip) variantsControls() {
 	h := ws.project.Hull
-	heading("VARIANTS")
+	heading("THEMES")
 	if len(h.Themes) == 0 {
-		if workshop.Row("variant-new", "+ Add a variant", "Variants are alternate hulls of this ship with their own rooms, crew and price.", "", false, style.Violet, 0) {
+		if workshop.Row("variant-new", "+ Add a theme", "Themes are alternate hulls of this ship with their own modules, crew and price.", "", false, style.Violet, 0) {
 			ws.beginTask(taskTheme)
 		}
 		return
@@ -235,10 +235,10 @@ func (ws *WsShip) variantsControls() {
 			ws.variantRooms(info)
 		}
 	}
-	if workshop.Row("variant-new", "+ Add a variant", "", "", false, style.Violet, 0) {
+	if workshop.Row("variant-new", "+ Add a theme", "", "", false, style.Violet, 0) {
 		ws.beginTask(taskTheme)
 	}
-	tooltip("Variants are alternate hulls of this ship with their own rooms, crew and price.")
+	tooltip("Themes are alternate hulls of this ship with their own modules, crew and price.")
 }
 
 func (ws *WsShip) variantExpanded(id string) bool {
@@ -265,7 +265,7 @@ func (ws *WsShip) variantRooms(info ship.ThemeInfo) {
 	s := window.PointSize()
 	imgui.IndentV(14 * s)
 	if info.Inherited {
-		hint("inherits ship's rooms")
+		hint("inherits ship's modules")
 	}
 	for _, slot := range ws.shipSlots(info.Slots) {
 		enabled := ship.Contains(info.Slots, slot)
@@ -285,7 +285,7 @@ func (ws *WsShip) variantRooms(info ship.ThemeInfo) {
 			ws.setRoomCollapsed(section, !expanded)
 		}
 		if enabled {
-			tooltip("Expand or collapse this room's options.")
+			tooltip("Expand or collapse this module's options.")
 		}
 		imgui.SameLine()
 		on := enabled
@@ -293,9 +293,9 @@ func (ws *WsShip) variantRooms(info ship.ThemeInfo) {
 			ws.setVariantRoom(info.ID, slot, on)
 		}
 		if enabled {
-			tooltip("Room stays in the map; this variant will not load it.")
+			tooltip("Module stays in the map; this theme will not load it.")
 		} else {
-			tooltip("Load this room in this variant.")
+			tooltip("Load this module in this theme.")
 		}
 		if enabled && expanded {
 			ws.variantOptions(info, slot)
@@ -304,10 +304,10 @@ func (ws *WsShip) variantRooms(info ship.ThemeInfo) {
 		imgui.PopID()
 		imgui.PopID()
 	}
-	if imgui.SmallButton("Variant...") {
+	if imgui.SmallButton("Theme...") {
 		imgui.OpenPopup("variant-menu-" + info.ID)
 	}
-	tooltip("Rename, price, crew, default variant or delete.")
+	tooltip("Rename, price, crew, default theme or delete.")
 	imgui.UnindentV(14 * s)
 }
 
@@ -329,7 +329,7 @@ func (ws *WsShip) variantOptions(info ship.ThemeInfo, slot string) {
 		if imgui.Checkbox(m.Name, &available) {
 			ws.setVariantOption(info.ID, o.ModuleID, available)
 		}
-		tooltip("Offer " + m.Name + " in this variant.")
+		tooltip("Offer " + m.Name + " in this theme.")
 		imgui.SameLine()
 		if width := imgui.ContentRegionAvail().X; width > menuWidth {
 			imgui.Dummy(imgui.Vec2{X: width - menuWidth})
@@ -352,32 +352,32 @@ func (ws *WsShip) variantOptions(info ship.ThemeInfo, slot string) {
 
 func (ws *WsShip) variantOptionMenu(themeID string, m ship.Module, o ship.OptionStatus, shared bool) {
 	imgui.BeginDisabledV(!o.Available || o.Forked)
-	if imgui.Selectable("Make variant-specific") {
+	if imgui.Selectable("Make theme-specific") {
 		ws.forkOption(m.ID, themeID)
 	}
 	imgui.EndDisabled()
 	switch {
 	case !o.Available:
-		tooltip("Offer this option in the variant first.")
+		tooltip("Offer this option in the theme first.")
 	case o.Forked:
-		tooltip("This variant already has its own copy.")
+		tooltip("This theme already has its own copy.")
 	default:
-		tooltip("Copies the room so this variant can be edited on its own.")
+		tooltip("Copies the module so this theme can be edited on its own.")
 	}
 	key := "fork/" + themeID + "/" + m.ID
 	confirm := o.Differs && shared
 	imgui.BeginDisabledV(!o.Forked || !shared)
 	if ws.pendingDelete == key {
 		ws.pendingShown = true
-		imgui.TextColored(style.Amber, "Discards this variant's changes to "+m.Name+".")
-		if imgui.Selectable("Use shared room") {
+		imgui.TextColored(style.Amber, "Discards this theme's changes to "+m.Name+".")
+		if imgui.Selectable("Use shared module") {
 			ws.pendingDelete = ""
 			ws.unforkOption(m.ID, themeID)
 		}
 		if imgui.Selectable("Keep the copy") {
 			ws.pendingDelete = ""
 		}
-	} else if imgui.SelectableV("Use shared room", false, confirmFlags(confirm), imgui.Vec2{}) {
+	} else if imgui.SelectableV("Use shared module", false, confirmFlags(confirm), imgui.Vec2{}) {
 		if confirm {
 			ws.pendingDelete, ws.pendingShown = key, true
 		} else {
@@ -387,9 +387,9 @@ func (ws *WsShip) variantOptionMenu(themeID string, m ship.Module, o ship.Option
 	imgui.EndDisabled()
 	switch {
 	case !shared:
-		tooltip(m.Name + " has no shared room; every variant keeps its own copy.")
+		tooltip(m.Name + " has no shared module; every theme keeps its own copy.")
 	case !o.Forked:
-		tooltip("This variant already uses the shared room.")
+		tooltip("This theme already uses the shared module.")
 	}
 }
 
@@ -413,25 +413,25 @@ func (ws *WsShip) variantMenu(t ship.Theme) {
 	}
 	imgui.BeginDisabledV(t.Default)
 	if imgui.Selectable("Make default") {
-		ws.change("Set default variant", func() error { return ws.project.SetDefaultTheme(t.ID) })
+		ws.change("Set default theme", func() error { return ws.project.SetDefaultTheme(t.ID) })
 	}
 	imgui.EndDisabled()
 	if t.Default {
-		tooltip("This is already the default variant.")
+		tooltip("This is already the default theme.")
 	}
 	imgui.Separator()
 	blocked := ""
 	switch {
 	case len(ws.project.Hull.Themes) < 2:
-		blocked = "This is the ship's only variant."
+		blocked = "This is the ship's only theme."
 	case t.Default:
-		blocked = "Make another variant the default first."
+		blocked = "Make another theme the default first."
 	}
 	key := "theme/" + t.ID
 	imgui.BeginDisabledV(blocked != "")
 	if ws.pendingDelete == key {
 		ws.pendingShown = true
-		imgui.TextColored(style.Amber, "Deletes this variant's hull, its own room copies, crew and price.")
+		imgui.TextColored(style.Amber, "Deletes this theme's hull, its own module copies, crew and price.")
 		if imgui.Selectable("Delete " + t.Name) {
 			ws.pendingDelete = ""
 			ws.deleteVariant(t.ID)
@@ -439,7 +439,7 @@ func (ws *WsShip) variantMenu(t ship.Theme) {
 		if imgui.Selectable("Keep it") {
 			ws.pendingDelete = ""
 		}
-	} else if imgui.SelectableV("Delete variant...", false, imgui.SelectableFlagsDontClosePopups, imgui.Vec2{}) {
+	} else if imgui.SelectableV("Delete theme...", false, imgui.SelectableFlagsDontClosePopups, imgui.Vec2{}) {
 		ws.pendingDelete, ws.pendingShown = key, true
 	}
 	imgui.EndDisabled()
@@ -469,7 +469,7 @@ func (ws *WsShip) setVariantRoom(themeID, slot string, on bool) {
 		}
 	}
 	editing := ws.editingSlot()
-	ws.change("Set variant rooms", func() error { return ws.project.SetThemeSlots(themeID, next) })
+	ws.change("Set theme modules", func() error { return ws.project.SetThemeSlots(themeID, next) })
 	if ws.message == "" && !on && editing == slot {
 		ws.source = 0
 		ws.rebuild()
@@ -493,20 +493,20 @@ func (ws *WsShip) setVariantOption(themeID, moduleID string, on bool) {
 			next = append(next, t.ID)
 		}
 	}
-	ws.change("Set variant options", func() error { return ws.project.SetModuleThemes(moduleID, next) })
+	ws.change("Set theme options", func() error { return ws.project.SetModuleThemes(moduleID, next) })
 }
 
 func (ws *WsShip) forkOption(moduleID, themeID string) {
-	ws.change("Make room variant-specific", func() error { return ws.project.ForkModuleForTheme(moduleID, themeID) })
+	ws.change("Make module theme-specific", func() error { return ws.project.ForkModuleForTheme(moduleID, themeID) })
 }
 
 func (ws *WsShip) unforkOption(moduleID, themeID string) {
-	ws.change("Use shared room", func() error { return ws.project.UnforkModuleForTheme(moduleID, themeID) })
+	ws.change("Use shared module", func() error { return ws.project.UnforkModuleForTheme(moduleID, themeID) })
 }
 
 func (ws *WsShip) deleteVariant(id string) {
 	active := ws.currentTheme().ID
-	ws.change("Delete variant", func() error { return ws.project.RemoveTheme(id) })
+	ws.change("Delete theme", func() error { return ws.project.RemoveTheme(id) })
 	if ws.message != "" {
 		return
 	}

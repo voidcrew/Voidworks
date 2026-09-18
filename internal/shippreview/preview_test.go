@@ -148,3 +148,15 @@ func TestShipMapPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestPreviewProgressDistinguishesScanningFromRendering(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "generation.log")
+	write(t, log, "Preview progress: 0 rendered, 42 reused (ship.png).\nhull fixture: 24x24\n")
+	if got := previewProgress(log); !strings.Contains(got, "0 rendered, 42 reused") {
+		t.Fatal(got)
+	}
+	write(t, log, "Preview progress: 0 rendered, 42 reused (ship.png).\nRendering changed or missing preview: changed.png\n")
+	if got := previewProgress(log); !strings.Contains(got, "changed.png") {
+		t.Fatal(got)
+	}
+}

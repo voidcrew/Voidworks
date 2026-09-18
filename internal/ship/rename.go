@@ -26,7 +26,7 @@ func componentName(h Hull, scope string) (string, bool) {
 // RenameNameError excludes the selected component while validating its new name.
 func (p *Project) RenameNameError(scope, name string) error {
 	if _, ok := componentName(p.Hull, scope); !ok {
-		return fmt.Errorf("choose a ship variant or room option")
+		return fmt.Errorf("choose a ship theme or module option")
 	}
 	if strings.HasPrefix(scope, "theme/") {
 		return p.themeNameError(name, strings.TrimPrefix(scope, "theme/"))

@@ -157,7 +157,7 @@ func (ws *WsShip) crewScopeLabel(s ship.CrewScope) string {
 		return "Ship crew (shared)"
 	}
 	if strings.HasPrefix(s.ID, "theme/") {
-		return "Variant crew"
+		return "Theme crew"
 	}
 	return s.Name
 }
@@ -170,7 +170,7 @@ func (ws *WsShip) crewControls() {
 		return
 	}
 	workshop.Section("CREW ROSTER", style.Violet)
-	if len(ws.project.Hull.Themes) > 0 && combo("Variant", ws.currentTheme().Name) {
+	if len(ws.project.Hull.Themes) > 0 && combo("Theme", ws.currentTheme().Name) {
 		for i, theme := range ws.project.Hull.Themes {
 			if imgui.SelectableV(theme.Name, i == ws.theme, 0, imgui.Vec2{}) {
 				ws.switchCrewTheme(i)
@@ -184,7 +184,7 @@ func (ws *WsShip) crewControls() {
 			preview = ws.crewScopeLabel(s)
 		}
 	}
-	if comboHelp("Roster", preview, "Ship crew is the base roster. A variant can replace it. Room options add jobs when installed.") {
+	if comboHelp("Roster", preview, "Ship crew is the base roster. A theme can replace it. Module options add jobs when installed.") {
 		for _, s := range c.scopes {
 			if imgui.SelectableV(ws.crewScopeLabel(s)+"##"+s.ID, c.scope == s.ID, 0, imgui.Vec2{}) && ws.commitCrew() {
 				ws.loadCrewScope(s.ID)
@@ -193,10 +193,10 @@ func (ws *WsShip) crewControls() {
 		imgui.EndCombo()
 	}
 	if strings.HasPrefix(c.scope, "theme/") {
-		hint("An empty variant roster uses the ship's crew.")
+		hint("An empty theme roster uses the ship's crew.")
 	}
 	if strings.HasPrefix(c.scope, "module/") {
-		hint("These jobs belong to this room option in " + ws.currentTheme().Name + ".")
+		hint("These jobs belong to this module option in " + ws.currentTheme().Name + ".")
 		ws.roomCrewCopyControls()
 	}
 	space()
@@ -278,7 +278,7 @@ func (ws *WsShip) crewContent() {
 	if c.selected < 0 || c.selected >= len(c.jobs) {
 		if len(c.jobs) == 0 && strings.HasPrefix(c.scope, "theme/") {
 			title("Uses ship crew")
-			hint("Copy the ship crew into this variant to customize it, or create a job.")
+			hint("Copy the ship crew into this theme to customize it, or create a job.")
 		} else if len(c.jobs) == 0 {
 			title("Build your crew")
 			hint("Create a job in the roster to set its role and starting equipment.")

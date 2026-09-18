@@ -21,6 +21,7 @@ type Render struct {
 	previewLighting *mappreview.Lighting
 	iconRevision    uint64
 	sources         map[int]*dmmap.Dmm
+	pixelPreview    pixelOffsetPreview
 }
 
 func New() *Render {

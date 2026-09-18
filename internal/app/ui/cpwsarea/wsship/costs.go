@@ -111,7 +111,7 @@ func (ws *WsShip) costsControls() {
 		group = "All components"
 	}
 	if combo("Show", group) {
-		for _, kind := range []string{"All components", "Hull", "Ship variant", "Room option"} {
+		for _, kind := range []string{"All components", "Hull", "Ship theme", "Module option"} {
 			if imgui.Selectable(kind) {
 				ws.costs.group = kind
 				if kind == "All components" {
@@ -133,7 +133,7 @@ func (ws *WsShip) costVisible(entry costEntry) bool {
 func (ws *WsShip) costsContent() {
 	c := &ws.costs
 	title("Part costs")
-	hint("Hull, ship variants, and room options")
+	hint("Hull, ship themes, and module options")
 	space()
 	scale := window.PointSize()
 	wide := imgui.ContentRegionAvail().X >= 780*scale
@@ -182,10 +182,10 @@ func (ws *WsShip) costsContent() {
 	} else if entry.scope.Default {
 		hint("Base hulls and default components normally stay free.")
 	} else {
-		hint("Alternative variants and room options normally have an unlock cost.")
+		hint("Alternative themes and module options normally have an unlock cost.")
 	}
-	if entry.scope.Kind == "Room option" {
-		hint("This price applies to every variant that uses this room option.")
+	if entry.scope.Kind == "Module option" {
+		hint("This price applies to every theme that uses this module option.")
 	}
 	space()
 	if entry.error != "" {

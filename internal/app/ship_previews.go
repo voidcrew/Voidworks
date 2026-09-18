@@ -33,6 +33,18 @@ func (a *app) ShipPreviewStatus() shippreview.Status {
 	return shippreview.Status{}
 }
 
+func (a *app) StopShipPreviews() {
+	if dme := a.LoadedEnvironment(); dme != nil {
+		a.previews.Stop(dme.RootDir, dme.RootFile)
+	}
+}
+
+func (a *app) ResumeShipPreviews() {
+	if dme := a.LoadedEnvironment(); dme != nil {
+		a.previews.Resume(dme.RootDir, dme.RootFile)
+	}
+}
+
 func (a *app) DoShipPreviews() {
 	var plan *shippreview.CleanupPlan
 	var selected []bool
@@ -57,11 +69,11 @@ func (a *app) DoShipPreviews() {
 			imgui.TextWrapped("Ship saves refresh changed or missing purchase previews in the background and reuse unchanged images. You can keep editing or close the editor while they finish.")
 			workshop.Gap()
 			status := a.ShipPreviewStatus()
-			workshop.PreviewStatus(status, a.ShipFilesSaved)
+			workshop.PreviewStatus(status, a.ResumeShipPreviews, a.StopShipPreviews)
 			if status.Phase == "" {
 				imgui.TextWrapped("No preview generation has run for this project yet.")
 			}
-			if status.Phase == "" || status.Phase == "complete" {
+			if status.Phase == "" || status.Phase == "complete" || status.Phase == "stopped" {
 				imgui.TextWrapped("After changing icons or rendering code, rebuild all previews to refresh unchanged maps too.")
 				if imgui.Button("Rebuild all previews") {
 					if dme := a.LoadedEnvironment(); dme != nil {
@@ -87,7 +99,7 @@ func (a *app) DoShipPreviews() {
 				}
 			default:
 			}
-			busy := status.Phase == "running" || status.Phase == "starting" || scanning != nil
+			busy := status.Phase == "running" || status.Phase == "starting" || status.Phase == "stopping" || scanning != nil
 			imgui.BeginDisabledV(busy || project == "")
 			if imgui.Button("Review unused previews") {
 				plan, cleanupError = nil, ""

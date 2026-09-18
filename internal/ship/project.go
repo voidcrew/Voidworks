@@ -69,6 +69,9 @@ type Project struct {
 	costEdited          map[string]bool
 	renamedMaps         map[string]bool
 	deletedMaps         map[string]bool // variant copies dropped back to a shared room
+	sourceMoves         *sourceMoves
+	sourceNames         map[string]string
+	loadedFileID        string
 	renamedSources      map[string]bool
 }
 
@@ -112,7 +115,7 @@ func OpenProject(c *Catalog, dme *dmenv.Dme, h Hull) (*Project, error) {
 		if err = json.Unmarshal(data, &s); err != nil {
 			return nil, err
 		}
-		if s.Version != 1 || s.Hull.Type != h.Type {
+		if (s.Version != 1 && s.Version != 2) || s.Hull.Type != h.Type {
 			return nil, fmt.Errorf("unsupported ship project %s", path)
 		}
 		if err := ValidID(s.ID); err != nil {
@@ -123,24 +126,34 @@ func OpenProject(c *Catalog, dme *dmenv.Dme, h Hull) (*Project, error) {
 				return nil, err
 			}
 		}
-		if s.Hull.Type != HullType+"/"+s.ID {
+		if s.Version == 1 && s.Hull.Type != HullType+"/"+s.ID {
 			return nil, fmt.Errorf("project ID does not match its template")
 		}
-		p.Settings = &s
-		p.partCosts = cloneCostScopes(s.PartCosts)
-		p.savedPartCosts = p.costBytes()
-		p.Hull = s.Hull
-		if err = p.installTypes(); err != nil {
-			return nil, err
-		}
-		for _, file := range p.outputPaths() {
-			if err = p.track(file); err != nil {
+		if s.Version == 2 {
+			p.loadedFileID = s.FileID
+		} else {
+			p.Settings = &s
+			p.partCosts = cloneCostScopes(s.PartCosts)
+			p.savedPartCosts = p.costBytes()
+			p.Hull = s.Hull
+			if err = p.installTypes(); err != nil {
 				return nil, err
 			}
+			for _, file := range p.outputPaths() {
+				if err = p.track(file); err != nil {
+					return nil, err
+				}
+			}
+			p.savedSettings = p.settingsBytes()
 		}
-		p.savedSettings = p.settingsBytes()
 	} else if !os.IsNotExist(err) {
 		return nil, err
+	}
+	if p.Settings == nil {
+		if obj := p.Dme.Objects[p.Hull.Type]; obj != nil {
+			p.Hull.Description = text(obj.Vars, "catalog_desc")
+			p.Hull.Hidden = obj.Vars.IntV("player_hidden", 0) != 0
+		}
 	}
 	if err = p.openAreas(); err != nil {
 		return nil, err
@@ -500,7 +513,7 @@ func (p *Project) settingsBytes() []byte {
 	return append(b, '\n')
 }
 func (p *Project) Modified() bool {
-	if p.hasMapRenames() {
+	if p.sourceMovesPending() || p.hasMapRenames() {
 		return true
 	}
 	if p.registrationUpgrade {
@@ -619,6 +632,10 @@ func (p *Project) Changes() ([]FileChange, error) {
 	if err != nil {
 		return nil, err
 	}
+	changes, err = p.relocatedChanges(changes)
+	if err != nil {
+		return nil, err
+	}
 	sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
 	return changes, nil
 }
@@ -627,6 +644,7 @@ func (p *Project) Save() error {
 	return SaveProjects([]*Project{p})
 }
 func (p *Project) accept(changes []FileChange) error {
+	changes = p.acceptRelocated(changes)
 	for _, c := range changes {
 		if d := p.Documents[c.Path]; d != nil {
 			if c.Delete {

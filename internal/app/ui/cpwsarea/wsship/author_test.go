@@ -191,6 +191,7 @@ func exerciseAuthoring(t *testing.T, ws *WsShip, dme *dmenv.Dme, render func()) 
 	}
 	ws.defaults()
 	ws.rebuild()
+	exerciseResizeControl(t, ws, render)
 	exerciseHelperMovesAndResize(t, ws, capture)
 	ws.source = 1
 	ws.rebuild()
@@ -337,6 +338,7 @@ func exerciseAuthoring(t *testing.T, ws *WsShip, dme *dmenv.Dme, render func()) 
 	exerciseCrew(t, ws, render, false)
 	exerciseVariantCrew(t, ws, render)
 	exerciseCosts(t, ws, render, false)
+	exerciseConfigurationRows(t, ws, render)
 	exerciseShipDetails(t, ws, render)
 	exerciseRenaming(t, ws, render)
 	exerciseRoomRenaming(t, ws, render)
@@ -352,6 +354,7 @@ func exerciseAuthoring(t *testing.T, ws *WsShip, dme *dmenv.Dme, render func()) 
 	exerciseRoomRenaming(t, ws, render)
 	exercisePreviewSaveHook(t, ws, render)
 	exerciseRecovery(t, ws, render)
+	exerciseLoadedShipDetailsAndRename(t, ws, render)
 	exerciseRemoval(t, ws, render)
 }
 
@@ -383,10 +386,14 @@ func exercisePreviewSaveHook(t *testing.T, ws *WsShip, render func()) {
 	ws.project.Restore(before)
 	ws.message = "Saved. Your ship files are up to date."
 	ws.setStage(stepReview)
-	for _, phase := range []string{"running", "failed"} {
+	for _, phase := range []string{"running", "stopping", "stopped", "failed"} {
 		app.previewStatus = shippreview.Status{Phase: phase, Message: "Generating purchase previews... Another refresh is queued.\nhull workshop_fixture: 24x24, slots [cargo loaded_bay]"}
 		if phase == "failed" {
 			app.previewStatus.Message = "Ship saved. Preview generation failed. Check the log, then retry."
+		} else if phase == "stopping" {
+			app.previewStatus.Message = "Stopping preview generation..."
+		} else if phase == "stopped" {
+			app.StopShipPreviews()
 		}
 		for i := 0; i < 3; i++ {
 			render()

@@ -62,6 +62,7 @@ func TestRenderShipWorkspace(t *testing.T) {
 	defer platform.DisposeImGuiGL()
 	window.SetPointSize(1)
 	exerciseDropdowns(t)
+	exercisePreviewButtons(t)
 	dme, err := dmenv.New(path)
 	if err != nil {
 		t.Fatal(err)
@@ -134,7 +135,13 @@ func TestRenderShipWorkspace(t *testing.T) {
 		}
 		remember()
 		if hull == "delta" {
+			if ws.project.Settings != nil {
+				t.Fatal("Delta must exercise resize without workshop authoring metadata")
+			}
+			exerciseConfigurationRows(t, ws, render)
+			exerciseResizeControl(t, ws, render)
 			exerciseShipContextContents(t, ws, render)
+			exerciseMovePreview(t, ws, render)
 			remember()
 		}
 		ws.source = 1

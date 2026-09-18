@@ -31,7 +31,7 @@ func rewriteTextField(data []byte, typePath, field, expected, value string) ([]b
 	if regexp.MustCompile(`(?m)^[\t ]*#`).Match(block) {
 		return nil, fmt.Errorf("%s has conditional definitions; edit its %s in code", typePath, field)
 	}
-	assignments := regexp.MustCompile(`(?m)^[\t ]+`+regexp.QuoteMeta(field)+`[\t ]*=`).FindAllIndex(block, -1)
+	assignments := textFieldAssignments(block, field)
 	if len(assignments) > 1 {
 		return nil, fmt.Errorf("multiple %s assignments in %s", field, typePath)
 	}
@@ -85,4 +85,26 @@ func rewriteTextField(data []byte, typePath, field, expected, value string) ([]b
 		return nil, fmt.Errorf("%s %s differs from the loaded environment; reload the environment first", typePath, field)
 	}
 	return append(append(append([]byte{}, data[:a]...), dmQuote(value)...), data[b:]...), nil
+}
+
+// Named list entries (notably crew job names) are not datum assignments.
+// The caller masks strings and comments first, preserving byte offsets.
+func textFieldAssignments(block []byte, field string) [][]int {
+	matches := regexp.MustCompile(`(?m)^[\t ]+`+regexp.QuoteMeta(field)+`[\t ]*=`).FindAllIndex(block, -1)
+	var result [][]int
+	pos, depth := 0, 0
+	for _, match := range matches {
+		for ; pos < match[0]; pos++ {
+			switch block[pos] {
+			case '(', '[', '{':
+				depth++
+			case ')', ']', '}':
+				depth--
+			}
+		}
+		if depth == 0 {
+			result = append(result, match)
+		}
+	}
+	return result
 }

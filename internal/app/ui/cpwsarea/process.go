@@ -67,7 +67,9 @@ func (w *WsArea) showWorkspaceWindow(dockId int, ws *workspace.Workspace) (open 
 		imgui.PopStyleVar()
 	}
 
-	if ws.Focused() {
+	// Hidden dock tabs do not process their panes, so their cached focus can
+	// still describe the previous frame. Only visible workspaces can claim it.
+	if visible && ws.Focused() {
 		// Appearing windows can receive focus before the explicit request runs.
 		// Consume it so a later toolbar click does not lose focus mid-press.
 		ws.SetTriggerFocus(false)

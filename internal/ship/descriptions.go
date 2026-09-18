@@ -36,7 +36,7 @@ func (p *Project) Description(scope string) string {
 func (p *Project) SetDescription(scope, value string) error {
 	current, ok := componentDescription(p.Hull, scope)
 	if !ok {
-		return fmt.Errorf("choose a ship variant or room option")
+		return fmt.Errorf("choose a ship theme or module option")
 	}
 	value = strings.ReplaceAll(value, "\r", "")
 	if descriptionText(current) == value {

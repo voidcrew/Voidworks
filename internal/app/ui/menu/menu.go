@@ -308,10 +308,14 @@ func (m *Menu) Process() {
 
 		w.Custom(func() {
 			status := m.app.ShipPreviewStatus()
-			if status.Phase == "running" || status.Phase == "starting" || status.Phase == "failed" || status.Phase == "error" {
+			if status.Phase != "" && status.Phase != "complete" {
 				label := "Generating previews..."
 				if status.Phase == "failed" || status.Phase == "error" {
 					label = "Previews need attention"
+				} else if status.Phase == "stopped" {
+					label = "Previews paused"
+				} else if status.Phase == "stopping" {
+					label = "Stopping previews..."
 				}
 				if imgui.Button(label) {
 					m.app.DoShipPreviews()

@@ -132,7 +132,7 @@ func rewriteRoomSlots(data []byte, typePath string, expected, slots []string) ([
 	block := mask[start:end]
 	assignments := roomSlotsAssignment.FindAllIndex(block, -1)
 	if len(assignments) > 1 {
-		return nil, fmt.Errorf("multiple room lists in %s", typePath)
+		return nil, fmt.Errorf("multiple module lists in %s", typePath)
 	}
 	if len(assignments) == 0 {
 		if reflect.DeepEqual(expected, slots) {
@@ -157,12 +157,12 @@ func rewriteRoomSlots(data []byte, typePath string, expected, slots []string) ([
 			}
 		}
 		if depth != 0 {
-			return nil, fmt.Errorf("unterminated room list in %s", typePath)
+			return nil, fmt.Errorf("unterminated module list in %s", typePath)
 		}
 	} else if bytes.HasPrefix(mask[valueStart:], []byte("null")) {
 		valueEnd += 4
 	} else {
-		return nil, fmt.Errorf("%s needs a literal upgrade_slot_ids list before adding rooms", typePath)
+		return nil, fmt.Errorf("%s needs a literal upgrade_slot_ids list before adding modules", typePath)
 	}
 	lineEnd := valueEnd
 	for lineEnd < end && mask[lineEnd] != '\n' {
@@ -173,7 +173,7 @@ func rewriteRoomSlots(data []byte, typePath string, expected, slots []string) ([
 	}
 	current, err := stringList(string(dmSourceMask(data[valueStart:valueEnd], false)))
 	if err != nil || !reflect.DeepEqual(current, expected) {
-		return nil, fmt.Errorf("%s room list differs from the loaded environment; reload the environment first", typePath)
+		return nil, fmt.Errorf("%s module list differs from the loaded environment; reload the environment first", typePath)
 	}
 	if reflect.DeepEqual(current, slots) {
 		return append([]byte{}, data...), nil

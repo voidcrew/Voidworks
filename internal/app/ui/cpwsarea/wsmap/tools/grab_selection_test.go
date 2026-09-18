@@ -22,6 +22,26 @@ func (e *selectionEditor) TileReplace(p util.Point, prefabs dmmdata.Prefabs) {
 func (*selectionEditor) UpdateCanvasByCoords([]util.Point) {}
 func (*selectionEditor) CommitChanges(string)              {}
 
+func TestGrabSelectionSurvivesRefocusButNotEditorChange(t *testing.T) {
+	previousEditor, previousTool := ed, Selected().Name()
+	defer func() { SetSelected(previousTool); ed = previousEditor }()
+	coord := util.Point{X: 1, Y: 1, Z: 1}
+	m := &dmmap.Dmm{MaxX: 1, MaxY: 1, MaxZ: 1, Tiles: []*dmmap.Tile{{Coord: coord}}}
+	first, second := &selectionEditor{dmm: m}, &selectionEditor{dmm: m}
+	SetEditor(first)
+	if !SetGrabSelection(coord, coord) {
+		t.Fatal("could not select tile")
+	}
+	SetEditor(first)
+	if _, _, ready := SelectionBounds(); !ready {
+		t.Fatal("returning from a menu cleared the same document's selection")
+	}
+	SetEditor(second)
+	if _, _, ready := SelectionBounds(); ready {
+		t.Fatal("selection leaked into another document")
+	}
+}
+
 func TestGrabSelectionUsesCurrentBoundsAndContents(t *testing.T) {
 	previousEditor, previousTool := ed, Selected().Name()
 	defer func() { SetSelected(previousTool); ed = previousEditor }()

@@ -27,7 +27,7 @@ func TestGuidedActionRejectsMissingSelection(t *testing.T) {
 	tools.ClearRoomShape()
 	ws := &WsShip{task: taskRoom}
 	ws.applyRegion()
-	if ws.message != "Select the room's tiles on the hull first." {
+	if ws.message != "Select the module's tiles on the hull first." {
 		t.Fatal("missing selection did not produce guidance")
 	}
 }

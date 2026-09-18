@@ -245,7 +245,7 @@ func (p *Project) retireMap(file string) error {
 func (p *Project) RemoveModule(id string) error {
 	i := p.moduleIndex(id)
 	if i < 0 {
-		return fmt.Errorf("room option no longer exists")
+		return fmt.Errorf("module option no longer exists")
 	}
 	m := p.Hull.Modules[i]
 	others := 0
@@ -255,7 +255,7 @@ func (p *Project) RemoveModule(id string) error {
 		}
 	}
 	if others == 0 {
-		return fmt.Errorf("%s is the only option for the %s room; remove the room instead", m.Name, SlotDisplayName(m.Slot))
+		return fmt.Errorf("%s is the only option for the %s module; remove the module instead", m.Name, SlotDisplayName(m.Slot))
 	}
 	if m.Default {
 		return fmt.Errorf("%s is the default option; choose another default first", m.Name)
@@ -320,7 +320,7 @@ func (p *Project) dropModule(i int) error {
 func (p *Project) SetDefaultModule(slot, id string) error {
 	i := p.moduleIndex(id)
 	if i < 0 || p.Hull.Modules[i].Slot != slot {
-		return fmt.Errorf("choose an option of the %s room", SlotDisplayName(slot))
+		return fmt.Errorf("choose an option of the %s module", SlotDisplayName(slot))
 	}
 	if p.Hull.Modules[i].Default {
 		return nil
@@ -382,7 +382,7 @@ func (p *Project) RemoveSlot(themeIndex int, slot string) error {
 		return err
 	}
 	if !p.slotIDUsed(slot) {
-		return fmt.Errorf("room no longer exists")
+		return fmt.Errorf("module no longer exists")
 	}
 	file, err := p.Catalog.HullFile(p.Hull, theme)
 	if err != nil {
@@ -393,7 +393,7 @@ func (p *Project) RemoveSlot(themeIndex int, slot string) error {
 		return err
 	}
 	if _, _, marker := slotMarker(hull.Map, slot); marker == nil {
-		return fmt.Errorf("%s has no hull marker in this variant", SlotDisplayName(slot))
+		return fmt.Errorf("%s has no hull marker in this theme", SlotDisplayName(slot))
 	}
 	if p.Settings == nil {
 		if Contains(p.Hull.Slots, slot) {
@@ -517,7 +517,7 @@ func (p *Project) ReshapeSlot(themeIndex int, slot string, origin util.Point, sh
 	}
 	old, ok := rooms[slot]
 	if !ok {
-		return fmt.Errorf("%s has no hull marker in this variant", SlotDisplayName(slot))
+		return fmt.Errorf("%s has no hull marker in this theme", SlotDisplayName(slot))
 	}
 	max := util.Point{X: origin.X + shape.W - 1, Y: origin.Y + shape.H - 1, Z: 1}
 	if origin.Z != 1 || !hull.Map.HasTile(origin) || !hull.Map.HasTile(max) {
@@ -588,7 +588,7 @@ func (p *Project) ReshapeSlot(themeIndex int, slot string, origin util.Point, sh
 			continue
 		}
 		if coord != old.Marker {
-			return fmt.Errorf("the %s variant places this room elsewhere; reshape it there first", h.theme.Name)
+			return fmt.Errorf("the %s theme places this module elsewhere; reshape it there first", h.theme.Name)
 		}
 		markers = append(markers, placed{h, marker})
 	}

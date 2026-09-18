@@ -291,7 +291,7 @@ func TestAddVariantCopiesRoomsWhenAsked(t *testing.T) {
 func TestRemoveVariantOnHandwrittenShip(t *testing.T) {
 	p, roomSource, hullSource := variantShipProject(t)
 	rooms, _ := os.ReadFile(roomSource)
-	if err := p.RemoveTheme("standard"); err == nil || !strings.Contains(err.Error(), "default variant") {
+	if err := p.RemoveTheme("standard"); err == nil || !strings.Contains(err.Error(), "default theme") {
 		t.Fatalf("removed the default variant: %v", err)
 	}
 	if err := p.ForkModuleForTheme("cargo_lab", "other"); err != nil {
@@ -315,7 +315,7 @@ func TestRemoveVariantOnHandwrittenShip(t *testing.T) {
 	if _, ok := p.partCosts["theme/other"]; ok {
 		t.Fatal("the removed variant kept its price")
 	}
-	if err := p.RemoveTheme("standard"); err == nil || !strings.Contains(err.Error(), "only variant") {
+	if err := p.RemoveTheme("standard"); err == nil || !strings.Contains(err.Error(), "only theme") {
 		t.Fatalf("removed the last variant: %v", err)
 	}
 	after := p.Capture()
@@ -548,7 +548,7 @@ func TestUnforkNeedsASharedRoom(t *testing.T) {
 	if forked, same, err := p.ModuleThemeStatus("cargo_themed", "other"); err != nil || !forked || same {
 		t.Fatalf("a variant-only room does not read as its own copy: %v %v %v", forked, same, err)
 	}
-	if err := p.UnforkModuleForTheme("cargo_themed", "other"); err == nil || !strings.Contains(err.Error(), "shared room") {
+	if err := p.UnforkModuleForTheme("cargo_themed", "other"); err == nil || !strings.Contains(err.Error(), "shared module") {
 		t.Fatalf("dropped the only copy of a room: %v", err)
 	}
 }

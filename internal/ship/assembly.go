@@ -253,31 +253,34 @@ func (a *Assembly) roomShape(slot string, marker, origin util.Point, mask string
 // Display converts ownership-tagged cells into a render-only DMM. The original
 // files are opened separately for edits, using Voidworks's normal save and undo.
 func (a *Assembly) Display(dme *dmenv.Dme) (*dmmap.Dmm, error) {
-	data := &dmmdata.DmmData{Filepath: filepath.Join(dme.RootDir, "assembled-ship-preview"), MaxX: a.MaxX, MaxY: a.MaxY, MaxZ: a.MaxZ, Dictionary: dmmdata.DataDictionary{}, Grid: dmmdata.DataGrid{}}
-	for y := 1; y <= a.MaxY; y++ {
-		for x := 1; x <= a.MaxX; x++ {
-			coord := util.Point{X: x, Y: y, Z: 1}
-			key := dmmdata.Key(fmt.Sprintf("preview%d_%d", x, y))
-			data.Grid[coord] = key
-			for _, atom := range a.Cells[coord] {
-				data.Dictionary[key] = append(data.Dictionary[key], atom.Prefab)
-			}
-		}
+	// Construct display instances directly. Loading this as an editable DMM
+	// would persist every temporary Move/Quick Edit offset during a drag.
+	const name = "assembled-ship-preview"
+	dmm := &dmmap.Dmm{
+		Name: name, Path: dmmap.DmmPath{Readable: name, Absolute: filepath.Join(dme.RootDir, name)},
+		MaxX: a.MaxX, MaxY: a.MaxY, MaxZ: a.MaxZ,
+		Tiles: make([]*dmmap.Tile, 0, a.MaxX*a.MaxY*a.MaxZ),
 	}
-	dmm, _ := dmmap.New(dme, data, "")
-	for coord, atoms := range a.Cells {
-		tile := dmm.GetTile(coord)
-		var instances dmmap.Instances
-		for _, atom := range atoms {
-			if atom.Instance != nil {
-				instances = append(instances, atom.Instance.CopyAt(coord))
-			} else {
-				// Unknown types are not in the freshly built map; make their
-				// instances directly so the preview still shows every atom.
-				instances = append(instances, dmminstance.New(coord, dmmap.PrefabStorage.Put(atom.Prefab)))
+	for z := 1; z <= a.MaxZ; z++ {
+		for y := 1; y <= a.MaxY; y++ {
+			for x := 1; x <= a.MaxX; x++ {
+				coord := util.Point{X: x, Y: y, Z: z}
+				tile := &dmmap.Tile{Coord: coord}
+				instances := make(dmmap.Instances, 0, len(a.Cells[coord]))
+				for _, atom := range a.Cells[coord] {
+					if obj := dme.Objects[atom.Prefab.Path()]; obj != nil && !atom.Prefab.Vars().HasParent() {
+						atom.Prefab.Vars().LinkParent(obj.Vars)
+					}
+					if atom.Instance != nil {
+						instances = append(instances, atom.Instance.CopyAt(coord))
+					} else {
+						instances = append(instances, dmminstance.New(coord, atom.Prefab))
+					}
+				}
+				tile.Set(instances)
+				dmm.Tiles = append(dmm.Tiles, tile)
 			}
 		}
-		tile.Set(instances)
 	}
 	return dmm, nil
 }

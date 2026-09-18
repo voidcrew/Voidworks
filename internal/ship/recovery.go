@@ -19,6 +19,9 @@ type recoveryDocument struct {
 }
 
 type recoveryProject struct {
+	SourceMoves         *sourceMoves
+	SourceNames         map[string]string
+	LoadedFileID        string
 	Version             int
 	Environment         string
 	Documents           map[string]recoveryDocument
@@ -55,6 +58,13 @@ func (p *Project) CaptureRecovery() ([]byte, error) {
 	if p.Crew != nil && len(p.Crew.ModuleThemes) > 0 {
 		r.Version = 3 // Older editors do not preserve independent room rosters.
 	}
+	if p.rooms != nil && p.rooms.details.file != "" {
+		r.Version = 4
+	}
+	if p.sourceMoves != nil {
+		r.Version = 4
+	}
+	r.SourceMoves, r.SourceNames, r.LoadedFileID = p.sourceMoves, p.sourceNames, p.loadedFileID
 	r.Hull = p.Hull
 	r.Settings = p.Settings
 	r.Files = p.files
@@ -112,7 +122,7 @@ func RecoverProject(c *Catalog, dme *dmenv.Dme, data []byte) (*Project, error) {
 	if err := json.Unmarshal(data, &r); err != nil {
 		return nil, err
 	}
-	if (r.Version < 1 || r.Version > 3) || !sameRecoveryPath(r.Environment, dme.RootFile) {
+	if (r.Version < 1 || r.Version > 4) || !sameRecoveryPath(r.Environment, dme.RootFile) {
 		return nil, fmt.Errorf("recovery belongs to a different project or version")
 	}
 	if !strings.HasPrefix(r.Hull.Type, HullType+"/") {
@@ -127,6 +137,29 @@ func RecoverProject(c *Catalog, dme *dmenv.Dme, data []byte) (*Project, error) {
 		}
 	}
 	paths := []string{r.Environment}
+	if r.LoadedFileID != "" {
+		if err := ValidID(r.LoadedFileID); err != nil {
+			return nil, err
+		}
+	}
+	if r.SourceMoves != nil {
+		paths = append(paths, r.SourceMoves.Manifest, r.SourceMoves.ManifestBefore.Path)
+		for path := range r.SourceMoves.RetainedMaps {
+			paths = append(paths, path)
+		}
+		for path := range r.SourceMoves.Logical {
+			paths = append(paths, path)
+		}
+		for path, c := range r.SourceMoves.Physical {
+			paths = append(paths, path, c.Path)
+		}
+		for path, to := range r.SourceMoves.Saved {
+			paths = append(paths, path, to)
+		}
+	}
+	for path, to := range r.SourceNames {
+		paths = append(paths, path, to)
+	}
 	for path := range r.Documents {
 		paths = append(paths, path)
 	}
@@ -148,7 +181,7 @@ func RecoverProject(c *Catalog, dme *dmenv.Dme, data []byte) (*Project, error) {
 		}
 	}
 	if v := r.Rooms; v != nil {
-		paths = append(paths, v.code, v.themeFile, v.themeList.file)
+		paths = append(paths, v.code, v.themeFile, v.themeList.file, v.details.file, v.manifest, v.portLabel.file)
 		for path, f := range v.sources {
 			paths = append(paths, path, f.Path)
 		}
@@ -209,6 +242,7 @@ func RecoverProject(c *Catalog, dme *dmenv.Dme, data []byte) (*Project, error) {
 	p.costOriginal = r.CostOriginal
 	p.costSources = r.CostSources
 	p.costEdited = r.CostEdited
+	p.sourceMoves, p.sourceNames, p.loadedFileID = r.SourceMoves, r.SourceNames, r.LoadedFileID
 	p.renamedMaps = r.RenamedMaps
 	p.deletedMaps = r.DeletedMaps
 	p.renamedSources = r.RenamedSources
@@ -307,26 +341,30 @@ func (v *costSource) UnmarshalJSON(data []byte) error {
 }
 
 type recoveryRoomEditing struct {
-	Base         Hull
-	Sources      map[string]FileChange
-	Targets      map[string]string
-	Names        map[string]nameTarget
-	Descriptions map[string]nameTarget
-	MapFields    map[string]nameTarget
-	Removals     map[string]nameTarget
-	Defaults     map[string]nameTarget
-	ThemeTargets map[string]nameTarget
-	ThemeList    nameTarget
-	ThemeOrder   []string
-	ThemeJobs    map[string]string
-	ThemeFile    string
-	ModuleSlots  map[string]nameTarget
-	ModuleThemes map[string]moduleThemeTarget
-	Code         string
+	ShortName, PortName string
+	PortLabel           nameTarget
+	Manifest            string
+	Details             nameTarget
+	Base                Hull
+	Sources             map[string]FileChange
+	Targets             map[string]string
+	Names               map[string]nameTarget
+	Descriptions        map[string]nameTarget
+	MapFields           map[string]nameTarget
+	Removals            map[string]nameTarget
+	Defaults            map[string]nameTarget
+	ThemeTargets        map[string]nameTarget
+	ThemeList           nameTarget
+	ThemeOrder          []string
+	ThemeJobs           map[string]string
+	ThemeFile           string
+	ModuleSlots         map[string]nameTarget
+	ModuleThemes        map[string]moduleThemeTarget
+	Code                string
 }
 
 func (v roomEditing) MarshalJSON() ([]byte, error) {
-	return json.Marshal(recoveryRoomEditing{Base: v.base, Sources: v.sources, Targets: v.targets, Names: v.names, Descriptions: v.descriptions, MapFields: v.mapFields, Removals: v.removals, Defaults: v.defaults, ThemeTargets: v.themeTargets, ThemeList: v.themeList, ThemeOrder: v.themeOrder, ThemeJobs: v.themeJobs, ThemeFile: v.themeFile, ModuleSlots: v.moduleSlots, ModuleThemes: v.moduleThemes, Code: v.code})
+	return json.Marshal(recoveryRoomEditing{Base: v.base, Details: v.details, PortLabel: v.portLabel, ShortName: v.shortName, PortName: v.portName, Manifest: v.manifest, Sources: v.sources, Targets: v.targets, Names: v.names, Descriptions: v.descriptions, MapFields: v.mapFields, Removals: v.removals, Defaults: v.defaults, ThemeTargets: v.themeTargets, ThemeList: v.themeList, ThemeOrder: v.themeOrder, ThemeJobs: v.themeJobs, ThemeFile: v.themeFile, ModuleSlots: v.moduleSlots, ModuleThemes: v.moduleThemes, Code: v.code})
 }
 func (v *roomEditing) UnmarshalJSON(data []byte) error {
 	var r recoveryRoomEditing
@@ -334,6 +372,10 @@ func (v *roomEditing) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	v.base = r.Base
+	v.details = r.Details
+	v.portLabel = r.PortLabel
+	v.shortName, v.portName = r.ShortName, r.PortName
+	v.manifest = r.Manifest
 	v.sources = r.Sources
 	v.targets = r.Targets
 	v.names = r.Names
