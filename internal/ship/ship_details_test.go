@@ -69,6 +69,40 @@ func TestLoadedShipDetailsPreserveSourceAndHistory(t *testing.T) {
 	}
 }
 
+func TestShipVisibilityAfterReopeningWithLoadedEnvironment(t *testing.T) {
+	p := loadedRenameProject(t)
+	for _, hidden := range []bool{true, false, true} {
+		if err := p.SetShipDetails(ShipDetails{Hidden: hidden}); err != nil {
+			t.Fatal(err)
+		}
+		if err := p.Save(); err != nil {
+			t.Fatal(err)
+		}
+		// Closing and reopening Ship Workshop retains the parsed environment.
+		reopened, err := OpenProject(p.Catalog, p.Dme, p.Hull)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reopened.ShipDetails().Hidden != hidden {
+			t.Fatalf("saved player_hidden=%v, but the reopened checkbox is %v", hidden, reopened.ShipDetails().Hidden)
+		}
+		if reopened.Modified() {
+			t.Fatal("reading the saved visibility dirtied the ship")
+		}
+		p = reopened
+	}
+	if err := p.RenameShip("Renamed hidden ship"); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Save(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := OpenProject(p.Catalog, p.Dme, p.Hull)
+	if err != nil || !reopened.ShipDetails().Hidden {
+		t.Fatal("renaming left visibility dependent on the old source location", err)
+	}
+}
+
 func TestLoadedShipRenameFilesRecoveryAndHistory(t *testing.T) {
 	p := loadedRenameProject(t)
 	for _, theme := range p.Hull.Themes {

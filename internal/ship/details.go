@@ -3,6 +3,7 @@ package ship
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -13,6 +14,30 @@ type ShipDetails struct {
 	Description string
 	Hidden      bool
 	Crew        int
+}
+
+// Workshop saves do not reparse the full game environment. Prefer the current
+// literal in the ship's source when reopening it in the same editor session.
+// Inherited or computed values still come from the parsed environment.
+func (p *Project) savedShipHidden(saved bool) bool {
+	hidden := p.Hull.Hidden
+	if obj := p.Dme.Objects[p.Hull.Type]; obj != nil {
+		hidden = obj.Vars.IntV("player_hidden", 0) != 0
+	}
+	file, err := p.roomTypeFile(p.Hull.Type)
+	if err != nil {
+		return saved
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		// A workshop rename can move this file while the loaded environment
+		// still points at the old location. Its saved project retains the flag.
+		return saved
+	}
+	if value, explicit, err := sourceFlag(data, p.Hull.Type, "player_hidden"); err == nil && explicit {
+		return value
+	}
+	return hidden
 }
 
 func (p *Project) ShipDetails() ShipDetails {
