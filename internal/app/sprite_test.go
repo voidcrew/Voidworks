@@ -88,3 +88,42 @@ func exerciseSpritePickerCommands(t *testing.T, a *commandTestApp, frame func(),
 	}
 	capture("replace-sprite-applied")
 }
+
+func exerciseSpriteContextSwitch(t *testing.T, a *commandTestApp, ordinary *dmmap.Dmm, frame func()) {
+	t.Helper()
+	file := filepath.Join(a.LoadedEnvironment().RootDir, "picker-test.dmi")
+	a.openDMI(file, "initial", 2)
+	for range 4 {
+		frame()
+	}
+	sprite := a.activeSprite()
+	if sprite == nil || sprite.Preview == nil {
+		t.Fatal("opening a sprite did not capture its workshop context")
+	}
+	doc := sprite.Document
+	before := doc.Icon
+	sprite.Delete()
+	if !sprite.IsModified() {
+		t.Fatal("sprite context fixture has no unsaved pixels")
+	}
+	a.layout.WsArea.OpenMap(ordinary, nil)
+	for range 4 {
+		frame()
+	}
+	source := a.CurrentEditor().Dmm()
+	a.openDMI(file, "initial", 2)
+	for range 4 {
+		frame()
+	}
+	if a.activeSprite() != sprite || sprite.Document != doc || !sprite.IsModified() {
+		t.Fatal("reopening the DMI lost its live document or unsaved edits")
+	}
+	context, _ := sprite.Preview.SpriteContext()
+	if context != source {
+		t.Fatal("reopening the DMI retained the previous workshop preview")
+	}
+	sprite.Undo()
+	if doc.Icon != before || sprite.IsModified() {
+		t.Fatal("switching sprite contexts lost Undo history")
+	}
+}

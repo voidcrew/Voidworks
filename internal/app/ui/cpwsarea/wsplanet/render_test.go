@@ -78,8 +78,9 @@ func TestNativePlanetWorkshop(t *testing.T) {
 	dmmap.Init(dme)
 	dmicon.Cache.SetRootDirPath(dme.RootDir)
 	defer dmicon.Cache.Free()
-	a := &testApp{dme, command.NewStorage()}
+	a := &planetSpriteTestApp{testApp: &testApp{dme, command.NewStorage()}}
 	ws := New(a)
+	a.planet = ws
 	defer ws.Dispose()
 	if ws.project == nil {
 		t.Fatal(ws.message)
@@ -94,7 +95,11 @@ func TestNativePlanetWorkshop(t *testing.T) {
 		imgui.SetNextWindowPos(imgui.Vec2{})
 		imgui.SetNextWindowSize(imgui.Vec2{X: float32(viewWidth), Y: float32(viewHeight)})
 		imgui.BeginV("Planet Workshop", nil, imgui.WindowFlagsNoResize|imgui.WindowFlagsNoMove|imgui.WindowFlagsNoCollapse)
-		ws.Process()
+		if a.showSprite {
+			a.sprite.Process()
+		} else {
+			ws.Process()
+		}
 		imgui.End()
 		imgui.Render()
 		platform.Render(imgui.RenderedDrawData())
@@ -150,7 +155,7 @@ func TestNativePlanetWorkshop(t *testing.T) {
 	if ws.preview == nil || ws.preview.Map.MaxX != 123 {
 		t.Fatal("no planet rendered", ws.message)
 	}
-	testPreviewInspection(t, ws, io, render, capture, &viewWidth, &viewHeight)
+	testPreviewInspection(t, ws, a, io, render, capture, &viewWidth, &viewHeight)
 	testPlanetDraftNavigation(t, ws, capture)
 	testBiomeReorder(t, ws, io, render, capture)
 	testClimatePad(t, ws, io, render, capture)

@@ -11,6 +11,7 @@ import (
 	"sdmm/internal/dmapi/dm"
 	"sdmm/internal/dmapi/dmenv"
 	"sdmm/internal/dmapi/dmicon"
+	"sdmm/internal/dmapi/dmvars"
 	"sdmm/internal/imguiext/style"
 	"sdmm/internal/planet"
 )
@@ -59,6 +60,11 @@ func (w *Workspace) terrainName(path string) string {
 }
 
 func (w *Workspace) thumbnail(path string) *dmicon.Sprite {
+	_, _, sprite := w.spriteAppearance(path)
+	return sprite
+}
+
+func (w *Workspace) spriteAppearance(path string) (*dmvars.Variables, string, *dmicon.Sprite) {
 	for _, env := range []*dmenv.Dme{w.dme, w.catalog.Dme} {
 		o := env.Objects[path]
 		if o == nil {
@@ -76,11 +82,11 @@ func (w *Workspace) thumbnail(path string) *dmicon.Sprite {
 		for _, name := range states {
 			state := d.States[name]
 			if state != nil && state.Frames > 0 && len(state.Sprites) > 0 {
-				return state.SpriteV(o.Vars.IntV("dir", dm.DirDefault))
+				return o.Vars, name, state.SpriteV(o.Vars.IntV("dir", dm.DirDefault)).Current()
 			}
 		}
 	}
-	return nil
+	return nil, "", nil
 }
 
 func (w *Workspace) sprite(path string, pos imgui.Vec2, size float32) {
@@ -232,6 +238,9 @@ func (w *Workspace) picker() {
 	}
 	items := w.pickerItems(t.Field)
 	workshop.Muted(fmt.Sprintf("%d choices · Click a tile to use it", len(items)))
+	if _, ok := w.app.(spriteEditor); ok {
+		workshop.Muted("Right-click a choice to edit its sprite.")
+	}
 	imgui.BeginChild("planet-picker-results")
 	for index, path := range items {
 		pos := imgui.CursorScreenPos()
@@ -248,6 +257,7 @@ func (w *Workspace) picker() {
 		if workshop.Row(path, w.itemName(path), detail, badge, badge == "Current", style.Teal, 38) {
 			w.chooseItem(path)
 		}
+		w.spriteRowMenu(path)
 		workshop.Tooltip(w.itemName(path) + "\n" + path)
 		y := float32(5)
 		if detail != "" {

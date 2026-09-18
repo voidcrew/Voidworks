@@ -35,6 +35,7 @@ func (w *Workspace) riverSettings() {
 		if workshop.Row("river-material", w.itemName(r.Turf), "Click to change river material", "", false, style.Teal, 38) {
 			w.beginRiverPicker()
 		}
+		w.spriteRowMenu(r.Turf)
 		w.sprite(r.Turf, imgui.Vec2{X: pos.X + 9*window.PointSize(), Y: pos.Y + 12*window.PointSize()}, 32*window.PointSize())
 	} else if workshop.Button("Choose river material", true) {
 		w.beginRiverPicker()

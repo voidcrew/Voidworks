@@ -446,4 +446,5 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 		t.Fatal("returning from Crew did not restore the map clipboard target")
 	}
 	exerciseSpritePickerCommands(t, a, frame, capture, click)
+	exerciseSpriteContextSwitch(t, a, &ordinary, frame)
 }

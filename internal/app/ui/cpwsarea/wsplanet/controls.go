@@ -463,6 +463,9 @@ func (w *Workspace) editor() {
 	}
 	workshop.Gap()
 	total := 0.0
+	if _, ok := w.app.(spriteEditor); ok {
+		workshop.Muted("Right-click a choice to edit its sprite.")
+	}
 	for _, e := range t.Entries {
 		total += e.Weight
 	}
@@ -478,6 +481,7 @@ func (w *Workspace) editor() {
 			w.replace = i
 			w.filter = ""
 		}
+		w.spriteRowMenu(e.Path)
 		if selected && w.revealEntry {
 			imgui.SetScrollHereY(.5)
 			w.revealEntry = false

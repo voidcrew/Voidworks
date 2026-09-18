@@ -12,7 +12,7 @@ import (
 
 // Exercise real ImGui clicks against the native renderer, not just the selection
 // method. This catches canvas transforms, alpha holes and sprite overhangs.
-func testPreviewInspection(t *testing.T, w *Workspace, io imgui.IO, render func(), capture func(string), width, height *int) {
+func testPreviewInspection(t *testing.T, w *Workspace, app *planetSpriteTestApp, io imgui.IO, render func(), capture func(string), width, height *int) {
 	t.Helper()
 	saved, wide, tall := planet.Clone(w.project.State), *width, *height
 	defer func() {
@@ -106,6 +106,12 @@ func testPreviewInspection(t *testing.T, w *Workspace, io imgui.IO, render func(
 		}
 		if !reflect.DeepEqual(before, w.project.State) || *camera != cameraBefore {
 			t.Fatal("inspection changed the planet or moved the preview", tc.name)
+		}
+		if !tc.compact {
+			testPlanetSpriteMenu(t, w, app, io, render, capture, tc.name)
+		}
+		if tc.name == "inspect-fuel-tank" {
+			testPlanetSpriteRow(t, w, app, io, render, capture)
 		}
 		io.SetMousePosition(imgui.Vec2{X: -1000, Y: -1000})
 		capture(tc.name)
