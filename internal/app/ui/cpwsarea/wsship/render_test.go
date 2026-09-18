@@ -141,6 +141,7 @@ func TestRenderShipWorkspace(t *testing.T) {
 			exerciseConfigurationRows(t, ws, render)
 			exerciseResizeControl(t, ws, render)
 			exerciseShipContextContents(t, ws, render)
+			exerciseMovePreview(t, ws, render)
 			remember()
 		}
 		ws.source = 1

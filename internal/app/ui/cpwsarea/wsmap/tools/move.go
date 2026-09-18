@@ -21,6 +21,7 @@ type ToolMove struct {
 	lastTile        *dmmap.Tile
 	lastMouseCoords imgui.Vec2
 	lastOffsets     [2]int
+	initialPrefab   *dmmprefab.Prefab
 }
 
 func (ToolMove) Name() string {
@@ -43,6 +44,7 @@ func (t *ToolMove) onStart(util.Point) {
 	if hoveredInstance := ed.HoveredInstance(); hoveredInstance != nil {
 		ed.InstanceSelect(hoveredInstance)
 		t.instance = hoveredInstance
+		t.initialPrefab = hoveredInstance.Prefab()
 		t.lastMouseCoords = imgui.MousePos()
 		vars := t.instance.Prefab().Vars()
 		switch ed.Prefs().Editor.NudgeMode {
@@ -69,14 +71,29 @@ func (t *ToolMove) process() {
 		xAxis = "pixel_w"
 		yAxis = "pixel_z"
 	}
-	origPrefab := t.instance.Prefab()
 	mouseCoords := imgui.MousePos()
 	offsetX := (mouseCoords.X - t.lastMouseCoords.X) / ed.ZoomLevel()
 	offsetY := (t.lastMouseCoords.Y - mouseCoords.Y) / ed.ZoomLevel()
+	x, y := t.lastOffsets[0]+int(offsetX), t.lastOffsets[1]+int(offsetY)
+	currentVars := t.instance.Prefab().Vars()
+	if currentVars.IntV(xAxis, 0) == x && currentVars.IntV(yAxis, 0) == y {
+		return
+	}
 
-	newVars := dmvars.Set(origPrefab.Vars(), xAxis, strconv.Itoa(t.lastOffsets[0]+int(offsetX)))
-	newVars = dmvars.Set(newVars, yAxis, strconv.Itoa(t.lastOffsets[1]+int(offsetY)))
-	t.instance.SetPrefab(dmmprefab.New(dmmprefab.IdNone, origPrefab.Path(), newVars))
+	// Derive every preview from the starting prefab so returning to the start
+	// restores its exact overrides, including inherited offsets.
+	prefab := t.initialPrefab
+	newVars := prefab.Vars()
+	if x != t.lastOffsets[0] {
+		newVars = dmvars.Set(newVars, xAxis, strconv.Itoa(x))
+	}
+	if y != t.lastOffsets[1] {
+		newVars = dmvars.Set(newVars, yAxis, strconv.Itoa(y))
+	}
+	if newVars != prefab.Vars() {
+		prefab = dmmprefab.New(dmmprefab.IdNone, prefab.Path(), newVars)
+	}
+	t.instance.SetPrefab(prefab)
 
 	ed.UpdateCanvasByCoords([]util.Point{t.instance.Coord()})
 }
@@ -117,7 +134,11 @@ func (t *ToolMove) onStop(util.Point) {
 			}
 		}
 	}
+	// Only the released position belongs in the reusable prefab list.
+	t.instance.SetPrefab(dmmap.PrefabStorage.Put(t.instance.Prefab()))
+	ed.InstanceSelect(t.instance)
 	t.instance = nil
 	t.lastTile = nil
+	t.initialPrefab = nil
 	ed.CommitChanges("Moved Prefab")
 }
