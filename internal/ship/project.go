@@ -565,6 +565,9 @@ func (p *Project) track(path string) error {
 }
 
 func (p *Project) Changes() ([]FileChange, error) {
+	if err := p.ValidateSiliconCrew("", nil); err != nil {
+		return nil, err
+	}
 	var changes []FileChange
 	referenced := p.referencedMaps()
 	for path, d := range p.Documents {

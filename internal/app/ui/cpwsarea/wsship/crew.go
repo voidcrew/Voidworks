@@ -222,6 +222,7 @@ func (ws *WsShip) crewControls() {
 		}
 		c.jobs = append(c.jobs, ship.CrewJob{Name: name, Slots: 1, Category: "Assistant", Outfit: "/datum/outfit/job/assistant"})
 		c.selected = len(c.jobs) - 1
+		c.settings = true
 		c.dirty = true
 		ws.commitCrew()
 		ws.armCrewPicker()
@@ -291,7 +292,7 @@ func (ws *WsShip) crewContent() {
 	}
 	if p, ok := ws.app.SelectedPrefab(); ok && p.Path() != c.lastPrefab {
 		c.lastPrefab = p.Path()
-		if strings.HasPrefix(p.Path(), "/obj/item/") {
+		if !c.jobs[c.selected].IsSilicon() && strings.HasPrefix(p.Path(), "/obj/item/") {
 			ws.chooseCrewItem(p.Path())
 		}
 	}
@@ -303,6 +304,12 @@ func (ws *WsShip) crewContent() {
 	}
 	hint(fmt.Sprintf("%s  /  %d %s", j.Category, j.Slots, slotLabel))
 	space()
+	if j.IsSilicon() {
+		workshop.Panel("crew-details", imgui.Vec2{}, false)
+		ws.crewDetails()
+		workshop.EndPanel()
+		return
+	}
 	scale := window.PointSize()
 	available := imgui.ContentRegionAvail().X
 	// Keep usable form and picker widths before adding a third column.
@@ -470,6 +477,36 @@ func (ws *WsShip) crewDetails() {
 	c := &ws.crew
 	j := &c.jobs[c.selected]
 	workshop.Section("JOB SETTINGS", style.Violet)
+	roleLabel := map[string]string{"": "Crew", "crew": "Crew", "cyborg": "Cyborg", "ai": "AI"}[j.Role]
+	if combo("Start as", roleLabel) {
+		for _, role := range []string{"crew", "cyborg", "ai"} {
+			imgui.BeginDisabledV(role != "crew" && !ws.project.SupportsSiliconCrew())
+			if imgui.Selectable(map[string]string{"crew": "Crew", "cyborg": "Cyborg", "ai": "AI"}[role]) {
+				ws.setCrewRole(role)
+			}
+			imgui.EndDisabled()
+		}
+		imgui.EndCombo()
+		j = &c.jobs[c.selected]
+	}
+	if j.Role == "cyborg" && combo("Borg model", ws.crewItemName(j.BorgModel)) {
+		for _, path := range c.items {
+			if !strings.HasPrefix(path, "/obj/item/robot_model/") {
+				continue
+			}
+			if imgui.Selectable(ws.crewItemName(path) + "##" + path) {
+				j.BorgModel, c.dirty = path, true
+			}
+		}
+		imgui.EndCombo()
+		if c.dirty {
+			ws.commitCrew()
+			j = &c.jobs[c.selected]
+		}
+	}
+	if j.Role == "ai" {
+		hint("Requires a mapped networked AI core in the hull or this module.")
+	}
 	if textField("Job name", "e.g. Salvage Engineer", &j.Name) {
 		c.dirty = true
 	}
@@ -500,13 +537,19 @@ func (ws *WsShip) crewDetails() {
 			j = &c.jobs[c.selected]
 		}
 	}
+	imgui.BeginDisabledV(j.IsSilicon())
 	if imgui.Checkbox("Officer", &j.Officer) {
 		c.dirty = true
 		ws.commitCrew()
 		j = &c.jobs[c.selected]
 	}
+	imgui.EndDisabled()
 	tooltip("Marks this job as an officer in the ship roster.")
 	space()
+	if j.IsSilicon() {
+		ws.crewJobActions()
+		return
+	}
 	if comboHelp("Starting job outfit", ws.crewItemName(ws.project.CrewOutfit(*j)), "Supplies the underlying job, ID access and default gear. Your equipment selections override this preset.") {
 		textField("Find an outfit", "Name or type path", &c.outfitFilter)
 		for _, path := range c.outfits {

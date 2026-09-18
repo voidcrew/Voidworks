@@ -20,6 +20,7 @@ type CrewConfig struct {
 }
 type CrewJob struct {
 	ID, Name, Outfit, BaseOutfit, Category string
+	Role, BorgModel                        string `json:",omitempty"`
 	Slots                                  int
 	Officer                                bool
 	Equipment                              map[string]string
@@ -28,7 +29,7 @@ type CrewJob struct {
 }
 type CrewScope struct{ ID, Name, Type, Field string }
 
-var CrewCategories = []string{"Command", "Security", "Engineering", "Medical", "Science", "Cargo", "Service", "Assistant"}
+var CrewCategories = []string{"Command", "Security", "Engineering", "Medical", "Science", "Cargo", "Service", "Assistant", "Silicon"}
 
 type EquipmentSlot struct {
 	ID, Name string
@@ -343,6 +344,12 @@ func (p *Project) ValidateCrew(jobs []CrewJob) error {
 		if !Contains(CrewCategories, j.Category) {
 			return fmt.Errorf("%s: choose a job category", j.Name)
 		}
+		if err := p.validateCrewRole(j); err != nil {
+			return err
+		}
+		if j.IsSilicon() {
+			continue
+		}
 		o := p.Dme.Objects[p.CrewOutfit(j)]
 		if o == nil || !strings.HasPrefix(p.CrewOutfit(j), "/datum/outfit/") || p.Dme.Objects[o.Vars.ValueV("jobtype", "")] == nil {
 			return fmt.Errorf("%s: choose a job outfit with a valid job type", j.Name)
@@ -385,6 +392,9 @@ func (p *Project) SetCrewJobs(scope string, jobs []CrewJob) error {
 		}
 	}
 	if e := p.ValidateCrew(jobs); e != nil {
+		return e
+	}
+	if e := p.ValidateSiliconCrew(scope, jobs); e != nil {
 		return e
 	}
 	ids := map[string]bool{}
@@ -569,6 +579,12 @@ func renderCrew(jobs []CrewJob, p *Project) string {
 			officer = "TRUE"
 		}
 		fields := []string{"name = " + dmQuote(j.Name), "officer = " + officer, "outfit = " + outfit, "category = " + dmQuote(j.Category), "slots = " + strconv.Itoa(j.Slots)}
+		if j.IsSilicon() {
+			fields = []string{"name = " + dmQuote(j.Name), "role = " + dmQuote(j.Role), "category = " + dmQuote(j.Category), "slots = " + strconv.Itoa(j.Slots)}
+			if j.Role == "cyborg" {
+				fields = append(fields, "borg_model = "+j.BorgModel)
+			}
+		}
 		keys := []string{}
 		for k := range j.Extra {
 			keys = append(keys, k)
@@ -819,9 +835,13 @@ func parseCrew(raw string) ([]CrewJob, error) {
 				j.Name = dmCrewText(v)
 			case "outfit":
 				j.Outfit = v
+			case "role":
+				j.Role = dmCrewText(v)
+			case "borg_model":
+				j.BorgModel = strings.TrimSpace(v)
 			case "category":
 				j.Category = dmCrewText(v)
-				for i, macro := range []string{"COMMAND", "SECURITY", "ENGINEERING", "MEDICAL", "SCIENCE", "CARGO", "SERVICE", "ASSISTANT"} {
+				for i, macro := range []string{"COMMAND", "SECURITY", "ENGINEERING", "MEDICAL", "SCIENCE", "CARGO", "SERVICE", "ASSISTANT", "SILICON"} {
 					if v == "JOB_CAT_"+macro {
 						j.Category = CrewCategories[i]
 					}

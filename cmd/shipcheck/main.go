@@ -47,6 +47,15 @@ func main() {
 		if *hullFilter != "" && !strings.HasSuffix(h.Type, "/"+*hullFilter) {
 			continue
 		}
+		project, err := ship.OpenProject(catalog, dme, h)
+		if err == nil {
+			err = project.ValidateSiliconCrew("", nil)
+		}
+		if err != nil {
+			results = append(results, result{Hull: h.Name, Error: err.Error()})
+			failed = true
+			continue
+		}
 		themes := h.Themes
 		if len(themes) == 0 {
 			themes = []ship.Theme{{}}
