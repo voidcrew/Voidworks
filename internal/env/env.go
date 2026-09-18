@@ -4,7 +4,7 @@ const Undefined = "undefined"
 
 var (
 	Title    = "Voidworks"
-	Version  = "0.5.23"
+	Version  = "0.5.24"
 	Revision = Undefined
 	GitHub   = "https://github.com/voidcrew/Voidworks"
 	Support  = "https://ko-fi.com/spair"
