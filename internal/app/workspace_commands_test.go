@@ -179,6 +179,9 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 		frame()
 		frame()
 	}
+	// The sprite beta adds New DMI and Recover DMI drafts above the normal
+	// File entries. Click Save below those two additional menu rows.
+	fileSave := imgui.Vec2{X: 75, Y: 230}
 	click(imgui.Vec2{X: 700, Y: 360})
 	io.AddInputCharacters("Command Fixture")
 	frame()
@@ -240,7 +243,7 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 	if !a.HasSaveableWorkspace() || a.layout.WsArea.ActiveWorkspace().Content() != ws {
 		t.Fatal("File menu lost ship command routing")
 	}
-	click(imgui.Vec2{X: 75, Y: 190})
+	click(fileSave)
 	capture("after-file-save")
 	if a.previewRequests != 3 {
 		t.Fatal("File > Save did not reach the ship")
@@ -275,7 +278,7 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 		t.Fatal("Ctrl+S after tab switch did not save ship")
 	}
 	click(imgui.Vec2{X: 20, Y: 10})
-	click(imgui.Vec2{X: 75, Y: 190})
+	click(fileSave)
 	if a.previewRequests != 5 {
 		t.Fatal("File > Save after tab switch did not save ship")
 	}
