@@ -148,6 +148,13 @@ func (ws *WsShip) Process() {
 		flags |= imgui.WindowFlagsNoScrollbar | imgui.WindowFlagsNoScrollWithMouse
 	}
 	imgui.BeginChildV("ship-content", imgui.Vec2{}, false, flags)
+	if ws.stage != stepReview && strings.HasPrefix(ws.message, "Saved. Warning:") {
+		imgui.TextColored(style.Amber, "Saved with a warning: external changes were replaced.")
+		if imgui.Button("View save details and backups") {
+			ws.setStage(stepReview)
+		}
+		imgui.Separator()
+	}
 	switch {
 	case ws.wizard:
 		ws.newShip()
