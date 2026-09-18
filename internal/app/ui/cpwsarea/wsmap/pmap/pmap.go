@@ -333,7 +333,12 @@ func (p *PaneMap) OnActivate() {
 func (p *PaneMap) OnDeactivate() {
 	p.focused = false
 	p.active = false
-	tools.Selected().OnDeselect()
+	// Menus and property fields temporarily take focus from the canvas. Finish
+	// an in-progress stroke, but retain its selection for Copy/Cut and returning
+	// to the canvas. Binding a different editor clears it in tools.SetEditor.
+	if activePane == p {
+		tools.FinishStroke()
+	}
 	p.syncActiveCamera()
 	p.syncActivePane()
 	log.Print("pane deactivated:", p.dmm.Name)

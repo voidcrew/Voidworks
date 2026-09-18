@@ -115,6 +115,7 @@ func SetEditor(editor editor) {
 		return
 	}
 	FinishStroke()
+	Selected().OnDeselect()
 	ed = editor
 }
 
