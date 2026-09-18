@@ -22,6 +22,7 @@ func (p *PaneMap) locateHoveredInstance(u unit.Unit) {
 		xOffset := int(float32(mouseX)-u.ViewBounds().X1) + u.Sprite().X1
 		yOffset := u.Sprite().IconHeight() - 1 - int(float32(mouseY)-u.ViewBounds().Y1) + u.Sprite().Y1
 		if _, _, _, a := u.Sprite().Image().At(xOffset, yOffset).RGBA(); a != 0 {
+			p.tmpHoveredViewInstance = u.Instance()
 			if p.context == nil {
 				p.tmpLastHoveredInstance = u.Instance()
 			} else if original := p.context.Editable[u.Instance().Id()]; original != nil {

@@ -1,12 +1,58 @@
 package pmap
 
 import (
+	"sdmm/internal/app/ui/cpwsarea/wsmap/pmap/canvas"
+	"sdmm/internal/app/ui/cpwsarea/wsmap/tools"
 	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/dmapi/dmmap/dmmdata/dmmprefab"
 	"sdmm/internal/dmapi/dmmap/dmminstance"
 	"sdmm/internal/util"
 	"testing"
 )
+
+func TestPickUsesVisibleOwnerWithoutChangingOtherTools(t *testing.T) {
+	previous := tools.Selected().Name()
+	defer tools.SetSelected(previous)
+	local := util.Point{X: 1, Y: 1, Z: 1}
+	native := dmminstance.New(local, dmmprefab.New(1, "/obj/hull", nil))
+	foreign := dmminstance.New(util.Point{X: 9, Y: 9, Z: 1}, dmmprefab.New(2, "/obj/medkit", nil))
+	selected := false
+	p := &PaneMap{dmm: &dmmap.Dmm{}, canvasState: canvas.NewState(1, 1, 32)}
+	p.context = &EditContext{View: &dmmap.Dmm{}, Editable: map[uint64]*dmminstance.Instance{native.Id(): native}, Inspect: func(i *dmminstance.Instance) (string, func()) {
+		if i != foreign {
+			t.Fatal("resolved the wrong displayed item")
+		}
+		return "Med", func() { selected = true }
+	}}
+	p.tmpLastHoveredInstance, p.tmpHoveredViewInstance = native, foreign
+	p.processCanvasHoveredInstance()
+	tools.SetSelected(tools.TNPick)
+	if p.HoveredInstance() != foreign || selected {
+		t.Fatal("Pick must highlight the visible item without switching on hover")
+	}
+	if !p.SelectContextInstance(p.HoveredInstance()) || !selected {
+		t.Fatal("Pick did not activate the item's owner")
+	}
+	for _, tool := range []string{tools.TNAdd, tools.TNGrab, tools.TNMove, tools.TNDelete, tools.TNReplace} {
+		tools.SetSelected(tool)
+		if p.HoveredInstance() != native {
+			t.Fatalf("%s received another document's instance", tool)
+		}
+	}
+	tools.SetSelected(tools.TNPick)
+	p.hoveredViewInstance = native.CopyAt(util.Point{X: 5, Y: 5, Z: 1})
+	if p.HoveredInstance() != native || p.SelectContextInstance(native) {
+		t.Fatal("active source selection did not keep the native instance")
+	}
+	p.processCanvasHoveredInstance()
+	if p.HoveredInstance() != nil {
+		t.Fatal("empty canvas retained a stale pick target")
+	}
+	p.context.Inspect = nil
+	if !p.SelectContextInstance(foreign) {
+		t.Fatal("unresolved display copy was allowed into the variable editor")
+	}
+}
 
 func TestTileMenuUsesDisplayedContentsAndNativeOwnership(t *testing.T) {
 	local := util.Point{X: 1, Y: 1, Z: 1}

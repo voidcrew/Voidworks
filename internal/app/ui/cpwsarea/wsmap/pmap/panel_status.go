@@ -39,7 +39,7 @@ func (p *PaneMap) panelStatusLayoutStatus() (layout w.Layout) {
 	layout = append(layout, w.Tooltip(w.Text("Tile coordinates of the mouse")))
 
 	if isQuickToolToggled() && !tools.Selected().AltBehaviour() {
-		if hoveredInstance := p.canvasState.HoveredInstance(); hoveredInstance != nil {
+		if hoveredInstance := p.HoveredInstance(); hoveredInstance != nil {
 			layout = append(layout, w.TextFrame(hoveredInstance.Prefab().Path()))
 		}
 	} else if tool, ok := tools.Selected().(*tools.ToolGrab); ok && tool.HasSelectedArea() {

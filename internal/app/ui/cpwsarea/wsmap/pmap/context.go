@@ -3,6 +3,7 @@ package pmap
 import (
 	"sdmm/internal/app/ui/cpwsarea/wsmap/pmap/canvas"
 	"sdmm/internal/app/ui/cpwsarea/wsmap/pmap/tilemenu"
+	"sdmm/internal/app/ui/cpwsarea/wsmap/tools"
 	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/dmapi/dmmap/dmminstance"
 	"sdmm/internal/util"
@@ -93,6 +94,43 @@ func (p *PaneMap) MapToView(coord util.Point) util.Point {
 		coord.Y += p.context.Offset.Y
 	}
 	return coord
+}
+
+// Picking follows the visible sprite, including other assembled sources.
+// Painting and moving still operate on the active document's native instances.
+func (p *PaneMap) HoveredInstance() *dmminstance.Instance {
+	if p.context != nil && p.context.Inspect != nil && tools.IsSelected(tools.TNPick) {
+		if instance := p.hoveredViewInstance; instance != nil {
+			if native := p.context.Editable[instance.Id()]; native != nil {
+				return native
+			}
+			return instance
+		}
+		return nil
+	}
+	return p.canvasState.HoveredInstance()
+}
+
+// SelectContextInstance consumes selections outside this source, so the editor
+// never exposes an assembled copy as a writable map instance.
+func (p *PaneMap) SelectContextInstance(instance *dmminstance.Instance) bool {
+	if p.context == nil || p.ViewDmm() == p.dmm || p.context.Editable[instance.Id()] != nil {
+		return false
+	}
+	if p.context.Inspect != nil {
+		if _, selectSource := p.context.Inspect(instance); selectSource != nil {
+			selectSource()
+		}
+	}
+	return true
+}
+
+// Preserve the camera when changing the editable source of the same view.
+func (p *PaneMap) CopyCameraFrom(previous *PaneMap) {
+	p.canvas.Render().Camera = previous.canvas.Render().Camera
+	if p.ViewDmm() == previous.ViewDmm() {
+		p.centered = previous.centered
+	}
 }
 
 // TileMenuContents uses the same assembled tile as the renderer, including

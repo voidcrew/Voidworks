@@ -134,6 +134,9 @@ func TestRenderShipWorkspace(t *testing.T) {
 			t.Fatal(ws.message)
 		}
 		remember()
+		if hull == "scarab" {
+			exerciseShipPicking(t, ws, render)
+		}
 		if hull == "delta" {
 			if ws.project.Settings != nil {
 				t.Fatal("Delta must exercise resize without workshop authoring metadata")

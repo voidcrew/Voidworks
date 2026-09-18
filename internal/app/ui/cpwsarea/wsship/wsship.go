@@ -386,7 +386,7 @@ func (ws *WsShip) activate(p *pmap.PaneMap) {
 		return
 	}
 	if ws.pane != nil {
-		p.Canvas().Render().Camera = ws.pane.Canvas().Render().Camera
+		p.CopyCameraFrom(ws.pane)
 		ws.pane.OnDeactivate()
 	}
 	ws.pane = p
