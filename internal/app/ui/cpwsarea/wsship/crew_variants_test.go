@@ -105,7 +105,7 @@ func exerciseVariantCrew(t *testing.T, ws *WsShip, render func()) {
 	if ws.crew.scope != p.RoomCrewScope("cargo_basic", first.ID) || len(ws.crew.jobs) != 0 {
 		t.Fatal("a different variant inherited this room's new job")
 	}
-	if len(ws.crew.copySources) != 1 || ws.crew.copySources[0].Theme.ID != second.ID {
+	if len(ws.crew.copySources) < 3 || ws.crew.copySources[0].Module.ID != "cargo_basic" || ws.crew.copySources[0].Theme.ID != second.ID {
 		t.Fatal("copy control did not offer the configured variant")
 	}
 	ws.crew.copyOpen = true
@@ -121,7 +121,7 @@ func exerciseVariantCrew(t *testing.T, ws *WsShip, render func()) {
 	}
 	ws.crew.copyOpen = false
 	render()
-	if !ws.copyRoomCrewJob(second.ID, 0) || len(ws.crew.jobs) != 1 || ws.crew.jobs[0].Name != "Second quartermaster" {
+	if !ws.copyRoomCrewJob("cargo_basic", second.ID, 0) || len(ws.crew.jobs) != 1 || ws.crew.jobs[0].Name != "Second quartermaster" {
 		t.Fatal("copying the selected job failed", ws.crew.error)
 	}
 	ws.app.CommandStorage().Undo()
@@ -132,7 +132,24 @@ func exerciseVariantCrew(t *testing.T, ws *WsShip, render func()) {
 	if len(ws.crew.jobs) != 1 {
 		t.Fatal("redo did not restore the copied job")
 	}
-	setJob("First quartermaster")
+	for _, source := range []struct{ module, theme, name string }{
+		{"medical", first.ID, "Medical technician"},
+		{"variant_engineering", second.ID, "Variant engineer"},
+	} {
+		before := len(ws.crew.jobs)
+		if !ws.copyRoomCrewJob(source.module, source.theme, 0) || len(ws.crew.jobs) != before+1 || ws.crew.jobs[before].Name != source.name || ws.theme != 0 {
+			t.Fatal("copying a job from another module failed", ws.crew.error)
+		}
+		ws.app.CommandStorage().Undo()
+		if len(ws.crew.jobs) != before || ws.crew.scope != p.RoomCrewScope("cargo_basic", first.ID) {
+			t.Fatal("cross-module copy undo changed the wrong roster")
+		}
+		ws.app.CommandStorage().Redo()
+		if len(ws.crew.jobs) != before+1 || ws.crew.jobs[before].Name != source.name {
+			t.Fatal("cross-module copy redo lost the copied job")
+		}
+	}
+	ws.crew.jobs[0].Name, ws.crew.dirty = "First quartermaster", true
 	if !ws.commitCrew() {
 		t.Fatal(ws.crew.error)
 	}
@@ -174,14 +191,19 @@ func exerciseVariantCrew(t *testing.T, ws *WsShip, render func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for scope, name := range map[string]string{
-		"theme/" + first.ID: "First captain", "theme/" + second.ID: "Second captain",
-		p.RoomCrewScope("medical", first.ID): "Medical technician", p.RoomCrewScope("variant_engineering", second.ID): "Variant engineer",
-		p.RoomCrewScope("cargo_basic", first.ID): "First quartermaster", p.RoomCrewScope("cargo_basic", second.ID): "Second quartermaster",
+	for scope, names := range map[string][]string{
+		"theme/" + first.ID: {"First captain"}, "theme/" + second.ID: {"Second captain"},
+		p.RoomCrewScope("medical", first.ID): {"Medical technician"}, p.RoomCrewScope("variant_engineering", second.ID): {"Variant engineer"},
+		p.RoomCrewScope("cargo_basic", first.ID): {"First quartermaster", "Medical technician", "Variant engineer"}, p.RoomCrewScope("cargo_basic", second.ID): {"Second quartermaster"},
 	} {
 		jobs, err := reopened.CrewJobs(scope)
-		if err != nil || len(jobs) != 1 || jobs[0].Name != name {
+		if err != nil || len(jobs) != len(names) {
 			t.Fatalf("saved roster %s did not reopen: %+v, %v", scope, jobs, err)
+		}
+		for i, name := range names {
+			if jobs[i].Name != name {
+				t.Fatalf("saved module copy did not reopen in %s: %+v", scope, jobs)
+			}
 		}
 	}
 	if jobs, err := reopened.CrewJobs("ship"); err != nil || !reflect.DeepEqual(jobs, baseJobs) {

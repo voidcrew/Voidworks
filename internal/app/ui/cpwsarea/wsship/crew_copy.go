@@ -10,14 +10,14 @@ import (
 
 func (ws *WsShip) roomCrewCopyControls() {
 	c := &ws.crew
-	if !ws.project.SupportsRoomCrewVariants() {
+	if len(ws.project.Hull.Themes) > 0 && !ws.project.SupportsRoomCrewVariants() {
 		hint("Update the game project to edit module crew separately for each theme.")
 		return
 	}
 	if len(c.copySources) == 0 {
 		return
 	}
-	if actionButton("Copy job from theme...", false) && ws.commitCrew() {
+	if actionButton("Copy job from...", false) && ws.commitCrew() {
 		c.copyOpen = true
 	}
 	if c.copyOpen {
@@ -30,8 +30,33 @@ func (ws *WsShip) roomCrewCopyControls() {
 	imgui.SetNextWindowSizeConstraints(imgui.Vec2{X: width}, imgui.Vec2{X: width, Y: max(1, viewport.WorkSize().Y-32)})
 	if imgui.BeginPopupModalV("Copy module job", &c.copyOpen, imgui.WindowFlagsNoMove|imgui.WindowFlagsAlwaysAutoResize) {
 		source := c.copySources[c.copyVariant]
+		moduleLabel := func(m ship.Module) string { return ship.SlotDisplayName(m.Slot) + " / " + m.Name }
+		if combo("From module", moduleLabel(source.Module)) {
+			seen := map[string]bool{}
+			for i, candidate := range c.copySources {
+				id := candidate.Module.ID
+				if seen[id] {
+					continue
+				}
+				seen[id] = true
+				if imgui.SelectableV(moduleLabel(candidate.Module)+"##"+id, source.Module.ID == id, 0, imgui.Vec2{}) {
+					c.copyVariant, c.copyJob = i, 0
+					for j, preferred := range c.copySources {
+						if preferred.Module.ID == id && preferred.Theme.ID == ws.currentTheme().ID {
+							c.copyVariant = j
+							break
+						}
+					}
+				}
+			}
+			imgui.EndCombo()
+		}
+		source = c.copySources[c.copyVariant]
 		if combo("From theme", source.Theme.Name) {
 			for i, candidate := range c.copySources {
+				if candidate.Module.ID != source.Module.ID {
+					continue
+				}
 				if imgui.SelectableV(candidate.Theme.Name, i == c.copyVariant, 0, imgui.Vec2{}) {
 					c.copyVariant, c.copyJob = i, 0
 				}
@@ -58,7 +83,7 @@ func (ws *WsShip) roomCrewCopyControls() {
 		if c.error != "" {
 			hint(c.error)
 		}
-		if imgui.Button("Copy job") && ws.copyRoomCrewJob(source.Theme.ID, c.copyJob) {
+		if imgui.Button("Copy job") && ws.copyRoomCrewJob(source.Module.ID, source.Theme.ID, c.copyJob) {
 			imgui.CloseCurrentPopup()
 		}
 		imgui.SameLine()
@@ -70,7 +95,7 @@ func (ws *WsShip) roomCrewCopyControls() {
 	}
 }
 
-func (ws *WsShip) copyRoomCrewJob(source string, index int) bool {
+func (ws *WsShip) copyRoomCrewJob(sourceModule, sourceTheme string, index int) bool {
 	if !ws.commitCrew() {
 		return false
 	}
@@ -78,7 +103,7 @@ func (ws *WsShip) copyRoomCrewJob(source string, index int) bool {
 	selected := -1
 	ws.message = ""
 	ws.change("Copy module job", func() (err error) {
-		selected, err = ws.project.CopyRoomCrewJob(module, source, theme, index)
+		selected, err = ws.project.CopyRoomCrewJob(sourceModule, sourceTheme, module, theme, index)
 		return err
 	})
 	if ws.message != "" {
