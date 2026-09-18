@@ -116,37 +116,53 @@ func (p *Project) clearRoomCrewVariant(module, theme string) error {
 }
 
 type RoomCrewSource struct {
-	Theme Theme
-	Jobs  []CrewJob
+	Module Module
+	Theme  Theme
+	Jobs   []CrewJob
 }
 
-// RoomCrewSources offers only other variants with configured crew for this option.
+// RoomCrewSources offers configured rosters in other modules or themes.
 func (p *Project) RoomCrewSources(module, target string) ([]RoomCrewSource, error) {
 	i := p.moduleIndex(module)
 	if i < 0 {
 		return nil, fmt.Errorf("module option no longer exists")
 	}
-	m := p.Hull.Modules[i]
+	themes := p.Hull.Themes
+	if len(themes) == 0 {
+		themes = []Theme{{Name: "Shared"}}
+	}
 	var sources []RoomCrewSource
-	for _, theme := range p.Hull.Themes {
-		if theme.ID == target || !m.Available(theme.ID) || !Contains(p.Hull.SlotsFor(theme), m.Slot) {
-			continue
-		}
-		jobs, err := p.CrewJobs(p.RoomCrewScope(module, theme.ID))
-		if err != nil {
-			return nil, err
-		}
-		if len(jobs) > 0 {
-			sources = append(sources, RoomCrewSource{Theme: theme, Jobs: jobs})
+	// Keep the current module's other themes first, preserving the usual copy
+	// choice while also offering every other module option on this ship.
+	modules := append([]Module{p.Hull.Modules[i]}, p.Hull.Modules[:i]...)
+	modules = append(modules, p.Hull.Modules[i+1:]...)
+	for _, m := range modules {
+		for _, theme := range themes {
+			if m.ID == module && theme.ID == target || !m.Available(theme.ID) || !Contains(p.Hull.SlotsFor(theme), m.Slot) {
+				continue
+			}
+			jobs, err := p.CrewJobs(p.RoomCrewScope(m.ID, theme.ID))
+			if err != nil {
+				return nil, fmt.Errorf("%s / %s: %w", m.Name, theme.Name, err)
+			}
+			if len(jobs) > 0 {
+				sources = append(sources, RoomCrewSource{Module: m, Theme: theme, Jobs: jobs})
+			}
 		}
 	}
 	return sources, nil
 }
 
 // CopyRoomCrewJob appends a detached copy, including its slots and equipment.
-func (p *Project) CopyRoomCrewJob(module, source, target string, index int) (int, error) {
+func (p *Project) CopyRoomCrewJob(sourceModule, sourceTheme, module, target string, index int) (int, error) {
 	i, t := p.moduleIndex(module), p.themeIndex(target)
-	if i < 0 || t < 0 || !p.Hull.Modules[i].Available(target) || !Contains(p.Hull.SlotsFor(p.Hull.Themes[t]), p.Hull.Modules[i].Slot) {
+	var theme Theme
+	if t >= 0 {
+		theme = p.Hull.Themes[t]
+	} else if target != "" || len(p.Hull.Themes) != 0 {
+		return -1, fmt.Errorf("choose a module available in this theme")
+	}
+	if i < 0 || !p.Hull.Modules[i].Available(target) || !Contains(p.Hull.SlotsFor(theme), p.Hull.Modules[i].Slot) {
 		return -1, fmt.Errorf("choose a module available in this theme")
 	}
 	sources, err := p.RoomCrewSources(module, target)
@@ -154,36 +170,41 @@ func (p *Project) CopyRoomCrewJob(module, source, target string, index int) (int
 		return -1, err
 	}
 	for _, candidate := range sources {
-		if candidate.Theme.ID != source {
+		if candidate.Module.ID != sourceModule || candidate.Theme.ID != sourceTheme {
 			continue
 		}
 		if index < 0 || index >= len(candidate.Jobs) {
 			break
 		}
-		jobs, err := p.CrewJobs(p.RoomCrewScope(module, target))
-		if err != nil {
-			return -1, err
-		}
-		job := candidate.Jobs[index]
-		job.ID, job.Outfit = "", p.CrewOutfit(job)
-		used := map[string]bool{}
-		for _, existing := range jobs {
-			used[strings.ToLower(strings.Join(strings.Fields(existing.Name), " "))] = true
-		}
-		original := job.Name
-		for n := 1; used[strings.ToLower(strings.Join(strings.Fields(job.Name), " "))]; n++ {
-			job.Name = original + " (copy)"
-			if n > 1 {
-				job.Name = fmt.Sprintf("%s (copy %d)", original, n)
-			}
-		}
-		selected := len(jobs)
-		if err = p.SetCrewJobs(p.RoomCrewScope(module, target), append(jobs, job)); err != nil {
-			return -1, err
-		}
-		return selected, nil
+		return p.PasteCrewJob(p.RoomCrewScope(module, target), candidate.Jobs[index])
 	}
-	return -1, fmt.Errorf("choose a job from another theme")
+	return -1, fmt.Errorf("choose a job from another module or theme")
+}
+
+// PasteCrewJob appends an independent job to a ship, theme or module roster.
+func (p *Project) PasteCrewJob(scope string, copied CrewJob) (int, error) {
+	jobs, err := p.CrewJobs(scope)
+	if err != nil {
+		return -1, err
+	}
+	job := CloneCrewJobs([]CrewJob{copied})[0]
+	job.ID, job.Outfit = "", p.CrewOutfit(job)
+	used := map[string]bool{}
+	for _, existing := range jobs {
+		used[strings.ToLower(strings.Join(strings.Fields(existing.Name), " "))] = true
+	}
+	original := job.Name
+	for n := 1; used[strings.ToLower(strings.Join(strings.Fields(job.Name), " "))]; n++ {
+		job.Name = original + " (copy)"
+		if n > 1 {
+			job.Name = fmt.Sprintf("%s (copy %d)", original, n)
+		}
+	}
+	selected := len(jobs)
+	if err = p.SetCrewJobs(scope, append(jobs, job)); err != nil {
+		return -1, err
+	}
+	return selected, nil
 }
 
 // editedCrewRosters includes independent rosters for outfit generation and IDs.

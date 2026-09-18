@@ -89,6 +89,7 @@ type app interface {
 
 	HasActiveMap() bool
 	HasSaveableWorkspace() bool
+	CanPaste() bool
 
 	PathsFilter() *dm.PathsFilter
 	CommandStorage() *command.Storage
@@ -219,7 +220,7 @@ func (m *Menu) Process() {
 				Shortcut(platform.KeyModName(), "C"),
 			w.MenuItem("Paste", m.app.DoPaste).
 				Icon(icon.ContentPaste).
-				Enabled(m.canPaste()).
+				Enabled(m.app.CanPaste()).
 				Shortcut(platform.KeyModName(), "V"),
 			w.MenuItem("Cut", m.app.DoCut).
 				Icon(icon.ContentCut).
@@ -326,13 +327,6 @@ func (m *Menu) Process() {
 			}
 		}),
 	}).Build()
-}
-
-func (m *Menu) canPaste() bool {
-	if app, ok := m.app.(interface{ CanPaste() bool }); ok {
-		return app.CanPaste()
-	}
-	return m.app.Clipboard().HasData()
 }
 
 func (m *Menu) SetUpdateAvailable(version, description string) {

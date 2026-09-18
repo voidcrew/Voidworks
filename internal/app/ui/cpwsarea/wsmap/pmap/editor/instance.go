@@ -18,6 +18,9 @@ func (e *Editor) ClearPixelOffsetPreview() {
 
 // InstanceSelect selects the provided instance to edit.
 func (e *Editor) InstanceSelect(i *dmminstance.Instance) {
+	if e.pMap.SelectContextInstance(i) {
+		return
+	}
 	e.app.DoSelectPrefab(i.Prefab())
 	e.app.ShowLayout(lnode.NamePrefabs, false)
 	e.app.DoEditInstance(i)

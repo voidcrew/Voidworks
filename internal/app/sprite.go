@@ -107,4 +107,3 @@ func (a *app) activeSprite() *wssprite.Workspace {
 	sprite, _ := ws.Content().(*wssprite.Workspace)
 	return sprite
 }
-func (a *app) CanPaste() bool { return a.activeSprite() != nil || a.Clipboard().HasData() }

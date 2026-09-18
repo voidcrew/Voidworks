@@ -6,6 +6,28 @@ import (
 	"testing"
 )
 
+func TestSourceFlagReadsOnlyUnambiguousOwnLiterals(t *testing.T) {
+	for _, tc := range []struct {
+		body                     string
+		value, explicit, invalid bool
+	}{
+		{"\tplayer_hidden = TRUE // hidden\n", true, true, false},
+		{"\tplayer_hidden = 1\r\n", true, true, false},
+		{"\tplayer_hidden = FALSE\n", false, true, false},
+		{"\tplayer_hidden = 0\n", false, true, false},
+		{"\tjobs = list(\n\t\tplayer_hidden = TRUE,\n\t)\n", false, false, false},
+		{"\tdesc = \"player_hidden = TRUE\"\n\t// player_hidden = TRUE\n", false, false, false},
+		{"\tplayer_hidden = CUSTOM_FLAG\n", false, true, true},
+		{"\tplayer_hidden = TRUE\n\tplayer_hidden = FALSE\n", false, false, true},
+	} {
+		source := []byte("/datum/ship\n" + tc.body + "/datum/ship/other\n\tplayer_hidden = TRUE\n")
+		value, explicit, err := sourceFlag(source, "/datum/ship", "player_hidden")
+		if value != tc.value || explicit != tc.explicit || (err != nil) != tc.invalid {
+			t.Fatalf("%q: %v, %v, %v", tc.body, value, explicit, err)
+		}
+	}
+}
+
 func TestRewriteRoomSlotsPreservesOtherDefinitions(t *testing.T) {
 	for _, newline := range []string{"\n", "\r\n"} {
 		prefix := "/* /datum/ship_theme/sample\n\tupgrade_slot_ids = list(\"ignore\") */\n/datum/ship_theme/sample\n\tdesc = \"list(fake) // text\"\n\tupgrade_slot_ids = "

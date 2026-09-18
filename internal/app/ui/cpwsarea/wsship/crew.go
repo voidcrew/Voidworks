@@ -12,6 +12,7 @@ import (
 	"sdmm/internal/dmapi/dmicon"
 	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/imguiext/style"
+	"sdmm/internal/platform"
 	"sdmm/internal/ship"
 )
 
@@ -259,7 +260,7 @@ func (ws *WsShip) crewControls() {
 		imgui.TextWrapped(c.error)
 		imgui.PopStyleColor()
 	} else {
-		hint("Save from Review & save.")
+		hint("Select a job and press " + platform.KeyModName() + "+C to copy. Choose a roster and press " + platform.KeyModName() + "+V to paste.")
 	}
 }
 func (ws *WsShip) crewItemName(path string) string {

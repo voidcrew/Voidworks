@@ -91,6 +91,8 @@ type attachedMap interface {
 	CommandStackId() string
 	InContext() bool
 	BeforeHistory()
+	HoveredInstance() *dmminstance.Instance
+	SelectContextInstance(*dmminstance.Instance) bool
 }
 
 func New(app app, attachedMap attachedMap, dmm *dmmap.Dmm) *Editor {
@@ -110,7 +112,7 @@ func (e *Editor) Dmm() *dmmap.Dmm {
 
 // HoveredInstance returns currently hovered instance.
 func (e *Editor) HoveredInstance() *dmminstance.Instance {
-	return e.pMap.CanvasState().HoveredInstance()
+	return e.pMap.HoveredInstance()
 }
 
 // UpdateCanvasByCoords updates the canvas for the provided coords.

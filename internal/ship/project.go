@@ -109,6 +109,7 @@ func (d *Document) Modified() bool {
 
 func OpenProject(c *Catalog, dme *dmenv.Dme, h Hull) (*Project, error) {
 	p := &Project{Catalog: c, Dme: dme, Hull: h, Documents: map[string]*Document{}, files: map[string]FileChange{}}
+	savedHidden := h.Hidden
 	path, data, err := readShipProject(c, h)
 	if err == nil {
 		var s Settings
@@ -131,6 +132,7 @@ func OpenProject(c *Catalog, dme *dmenv.Dme, h Hull) (*Project, error) {
 		}
 		if s.Version == 2 {
 			p.loadedFileID = s.FileID
+			savedHidden = s.Hull.Hidden
 		} else {
 			p.Settings = &s
 			p.partCosts = cloneCostScopes(s.PartCosts)
@@ -152,8 +154,8 @@ func OpenProject(c *Catalog, dme *dmenv.Dme, h Hull) (*Project, error) {
 	if p.Settings == nil {
 		if obj := p.Dme.Objects[p.Hull.Type]; obj != nil {
 			p.Hull.Description = text(obj.Vars, "catalog_desc")
-			p.Hull.Hidden = obj.Vars.IntV("player_hidden", 0) != 0
 		}
+		p.Hull.Hidden = p.savedShipHidden(savedHidden)
 	}
 	if err = p.openAreas(); err != nil {
 		return nil, err

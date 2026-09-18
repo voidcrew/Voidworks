@@ -76,6 +76,15 @@ func exerciseLoadedShipDetailsAndRename(t *testing.T, ws *WsShip, render func())
 	}
 	check := func(name, description string, hidden bool) {
 		t.Helper()
+		cached, err := ship.OpenProject(ws.catalog, ws.project.Dme, ws.project.Hull)
+		if err != nil {
+			t.Fatal(err)
+		}
+		probe := &WsShip{project: cached}
+		probe.beginTask(taskSettings)
+		if probe.settings.hidden != hidden {
+			t.Fatalf("reopened details checkbox is %v for saved hidden=%v", probe.settings.hidden, hidden)
+		}
 		env, err := dmenv.New(ws.project.Dme.RootFile)
 		if err != nil {
 			t.Fatal(err)

@@ -187,6 +187,35 @@ func rewriteModularFlag(data []byte, typePath string) ([]byte, error) {
 	return rewriteFlag(data, typePath, "has_upgrade_slots", true)
 }
 
+// sourceFlag reads an explicit boolean without mistaking nested job fields or
+// comments for the ship's own assignment.
+func sourceFlag(data []byte, typePath, field string) (value, explicit bool, err error) {
+	mask := dmSourceMask(data, true)
+	start, end, err := dmTypeBlock(data, mask, typePath, field+" value")
+	if err != nil {
+		return false, false, err
+	}
+	assignments := textFieldAssignments(mask[start:end], field)
+	if len(assignments) == 0 {
+		return false, false, nil
+	}
+	if len(assignments) != 1 {
+		return false, false, fmt.Errorf("multiple %s values in %s", field, typePath)
+	}
+	a := start + assignments[0][1]
+	b := a
+	for b < end && mask[b] != '\n' && mask[b] != '\r' {
+		b++
+	}
+	switch strings.TrimSpace(string(mask[a:b])) {
+	case "TRUE", "1":
+		return true, true, nil
+	case "FALSE", "0":
+		return false, true, nil
+	}
+	return false, true, fmt.Errorf("%s uses an expression for %s", typePath, field)
+}
+
 // rewriteFlag sets one literal TRUE/FALSE field in a type block, inserting
 // the assignment when the block inherits its value.
 func rewriteFlag(data []byte, typePath, field string, value bool) ([]byte, error) {

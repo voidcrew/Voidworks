@@ -135,6 +135,8 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 	a.menu = menu.New(a)
 	ws := a.layout.WsArea.OpenShip()
 	defer ws.Dispose()
+	var textInput, focusText bool
+	textValue := "Text field clipboard"
 	frame := func() {
 		gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 		gl.Viewport(0, 0, width, height)
@@ -144,6 +146,15 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 		a.menu.Process()
 		a.layout.Process()
 		dialog.Process()
+		if textInput {
+			imgui.Begin("Text clipboard test")
+			if focusText {
+				imgui.SetKeyboardFocusHere()
+				focusText = false
+			}
+			imgui.InputText("Text", &textValue)
+			imgui.End()
+		}
 		imgui.Render()
 		platform.Render(imgui.RenderedDrawData())
 		gl.Finish()
@@ -379,5 +390,56 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 		t.Fatal("ship history lost after second tab switch")
 	}
 	capture("verified-commands")
+	click(imgui.Vec2{X: 390, Y: 777})
+	if !ws.EditingCrew() || a.activeCrewWorkspace() != ws {
+		t.Fatal("crew editor did not become the clipboard command target")
+	}
+	// Tile clipboard data must not enable Paste in an empty job clipboard.
+	if a.CanPaste() {
+		t.Fatal("tile clipboard enabled job paste")
+	}
+	press(glfw.KeyV)
+	if !ws.PasteCrewJob(ship.CrewJob{Name: "Clipboard engineer", Slots: 3, Category: "Engineering", Outfit: "/datum/outfit/job/assistant", Backpack: map[string]int{"/obj/item/crowbar": 2}}) {
+		t.Fatal("could not create job shortcut fixture")
+	}
+	frame()
+	a.clipboard.Free()
+	press(glfw.KeyC)
+	if a.crewClipboard == nil || a.crewClipboard.Name != "Clipboard engineer" || a.crewClipboard.Slots != 3 || a.crewClipboard.Backpack["/obj/item/crowbar"] != 2 || !a.CanPaste() {
+		t.Fatal("Ctrl+C did not copy the selected crew job")
+	}
+	press(glfw.KeyV)
+	if job, ok := ws.CopyCrewJob(); !ok || job.Name != "Clipboard engineer (copy)" {
+		t.Fatal("Ctrl+V did not append and select the job", job)
+	}
+	press(glfw.KeyZ)
+	press(glfw.KeyY)
+	press(glfw.KeyV)
+	if job, ok := ws.CopyCrewJob(); !ok || job.Name != "Clipboard engineer (copy 2)" {
+		t.Fatal("keyboard Undo/Redo did not restore the pasted job", job)
+	}
+	capture("job-shortcuts")
+	// An active text field owns Ctrl+C/V, without replacing the copied job or
+	// appending another job behind the input widget.
+	copied := a.crewClipboard
+	textInput, focusText = true, true
+	frame()
+	frame()
+	if !imgui.IsAnyItemActive() {
+		t.Fatal("text clipboard test did not focus its input")
+	}
+	press(glfw.KeyC)
+	press(glfw.KeyV)
+	if job, ok := ws.CopyCrewJob(); !ok || job.Name != "Clipboard engineer (copy 2)" || a.crewClipboard != copied {
+		t.Fatal("job shortcuts intercepted text editing")
+	}
+	textInput = false
+	frame()
+	frame()
+	click(imgui.Vec2{X: 130, Y: 10})
+	click(imgui.Vec2{X: 175, Y: 94})
+	if job, ok := ws.CopyCrewJob(); !ok || job.Name != "Clipboard engineer (copy 3)" {
+		t.Fatal("Edit > Paste did not use the job clipboard", job)
+	}
 	exerciseSpritePickerCommands(t, a, frame, capture, click)
 }

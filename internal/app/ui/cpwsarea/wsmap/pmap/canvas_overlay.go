@@ -75,7 +75,7 @@ func (p *PaneMap) processCanvasOverlayTools() {
 	}
 
 	if colInstance != overlay.ColorEmpty {
-		p.PushUnitHighlight(p.canvasState.HoveredInstance(), colInstance)
+		p.PushUnitHighlight(p.HoveredInstance(), colInstance)
 	}
 	if !p.canvasState.HoverOutOfBounds() {
 		p.PushAreaHover(p.canvasState.HoveredTileBounds(), colTileFill, colTileBorder)

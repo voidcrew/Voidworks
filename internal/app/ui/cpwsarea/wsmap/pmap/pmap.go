@@ -115,6 +115,8 @@ type PaneMap struct {
 	activeLevel int
 
 	tmpLastHoveredInstance *dmminstance.Instance
+	tmpHoveredViewInstance *dmminstance.Instance
+	hoveredViewInstance    *dmminstance.Instance
 }
 
 func (p *PaneMap) Canvas() *canvas.Canvas {
@@ -303,7 +305,9 @@ func (p *PaneMap) openTileMenu() {
 
 func (p *PaneMap) processCanvasHoveredInstance() {
 	p.canvasState.SetHoveredInstance(p.tmpLastHoveredInstance)
+	p.hoveredViewInstance = p.tmpHoveredViewInstance
 	p.tmpLastHoveredInstance = nil
+	p.tmpHoveredViewInstance = nil
 }
 
 func (p *PaneMap) updateShortcutsState() {
