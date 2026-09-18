@@ -61,6 +61,7 @@ type Project struct {
 	savedCrew           []byte
 	crewOriginal        map[string][]CrewJob
 	generatedBefore     map[string][]byte
+	saveWarnings        map[string]bool // active only during a save that permits overwrites
 	registrationUpgrade bool
 	partCosts           map[string]PartCosts
 	savedPartCosts      []byte
@@ -687,8 +688,31 @@ func (p *Project) accept(changes []FileChange) error {
 // SaveProjects also merges the shared environment includes when several ships
 // are created in one session. All outputs share one preflight and rollback.
 func SaveProjects(projects []*Project) error {
+	return saveProjects(projects, nil)
+}
+
+// SaveProjectsWithWarnings permits external edits to be replaced and keeps their
+// disk versions as backups. Validation and transactional rollback still apply.
+func SaveProjectsWithWarnings(projects []*Project) ([]SaveWarning, error) {
+	var warnings []SaveWarning
+	err := saveProjects(projects, &warnings)
+	return warnings, err
+}
+
+func saveProjects(projects []*Project, warnings *[]SaveWarning) error {
 	if len(projects) == 0 {
 		return nil
+	}
+	preserve := map[string]bool{}
+	if warnings != nil {
+		for _, p := range projects {
+			p.saveWarnings = preserve
+		}
+		defer func() {
+			for _, p := range projects {
+				p.saveWarnings = nil
+			}
+		}()
 	}
 	root := projects[0].Catalog.Root
 	files := map[string]FileChange{}
@@ -756,7 +780,7 @@ func SaveProjects(projects []*Project) error {
 		changes = append(changes, c)
 	}
 	sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
-	if err := WriteChanges(root, changes); err != nil {
+	if err := writeChangesWithWarnings(root, changes, os.Rename, warnings, preserve); err != nil {
 		return err
 	}
 	for _, p := range projects {

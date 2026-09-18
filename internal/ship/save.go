@@ -37,10 +37,20 @@ func WriteChanges(root string, changes []FileChange) error {
 }
 
 func writeChanges(root string, changes []FileChange, rename func(string, string) error) error {
+	return writeChangesWithWarnings(root, changes, rename, nil, nil)
+}
+
+// SaveWarning identifies a replaced file and the retained copy of its disk contents.
+type SaveWarning struct {
+	Path, Backup string
+}
+
+func writeChangesWithWarnings(root string, changes []FileChange, rename func(string, string) error, warnings *[]SaveWarning, preserve map[string]bool) error {
 	type staged struct {
 		change         FileChange
 		temp, backup   string
 		moved, written bool
+		conflict       bool
 	}
 	files := make([]staged, 0, len(changes))
 	seen := map[string]bool{}
@@ -66,11 +76,24 @@ func writeChanges(root string, changes []FileChange, rename func(string, string)
 		}
 		seen[key] = true
 		c.Path = path
-		if err := c.unchanged(); err != nil {
+		conflict := preserve[path]
+		if warnings != nil {
+			data, err := os.ReadFile(path)
+			if err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			exists := err == nil
+			conflict = conflict || exists != c.Existed || !bytes.Equal(data, c.Before)
+			// Stage against the current disk version so rollback restores it.
+			c.Before, c.Existed = data, exists
+		} else if err := c.unchanged(); err != nil {
 			return err
 		}
-		if c.Delete && (!c.Existed || len(c.After) != 0) {
+		if c.Delete && (len(c.After) != 0 || warnings == nil && !c.Existed) {
 			return fmt.Errorf("invalid deletion: %s", path)
+		}
+		if c.Delete && !c.Existed {
+			continue
 		}
 		if !c.Delete && c.Existed && bytes.Equal(c.Before, c.After) {
 			continue
@@ -82,7 +105,7 @@ func writeChanges(root string, changes []FileChange, rename func(string, string)
 		if err != nil {
 			return err
 		}
-		files = append(files, staged{change: c, temp: temp.Name(), backup: temp.Name() + ".previous"})
+		files = append(files, staged{change: c, temp: temp.Name(), backup: temp.Name() + ".previous", conflict: conflict})
 		if _, err = temp.Write(c.After); err == nil {
 			err = temp.Sync()
 		}
@@ -154,6 +177,14 @@ func writeChanges(root string, changes []FileChange, rename func(string, string)
 		f.written = true
 	}
 	for _, f := range files {
+		if f.conflict && warnings != nil {
+			warning := SaveWarning{Path: f.change.Path}
+			if f.moved {
+				warning.Backup = f.backup
+			}
+			*warnings = append(*warnings, warning)
+			continue
+		}
 		if f.moved {
 			if err := os.Remove(f.backup); err != nil {
 				log.Warn().Err(err).Msg("Files saved; recovery copy retained at " + f.backup)

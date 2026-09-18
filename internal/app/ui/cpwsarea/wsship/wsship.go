@@ -475,13 +475,24 @@ func (ws *WsShip) Save() bool {
 	for _, p := range ws.projects {
 		projects = append(projects, p)
 	}
-	if err := ship.SaveProjects(projects); err != nil {
+	warnings, err := ship.SaveProjectsWithWarnings(projects)
+	if err != nil {
 		ws.message = err.Error()
 		return false
 	}
 	ws.app.CommandStorage().ForceBalance(ws.CommandStackId())
 	ws.clearRecovery()
 	ws.message = "Saved. Your ship files are up to date."
+	if len(warnings) > 0 {
+		ws.message = "Saved. Warning: files changed outside the editor were replaced with your workshop version."
+		for _, warning := range warnings {
+			ws.message += "\n" + filepath.Base(warning.Path)
+			if warning.Backup != "" {
+				ws.message += " — previous disk version: " + warning.Backup
+			}
+			log.Warn().Str("file", warning.Path).Str("backup", warning.Backup).Msg("Save replaced external changes")
+		}
+	}
 	ws.notifySaved()
 	return true
 }

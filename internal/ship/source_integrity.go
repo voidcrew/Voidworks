@@ -21,6 +21,10 @@ func (p *Project) expectGenerated(path string, source []byte) {
 func (p *Project) checkGenerated(path string) error {
 	expected, ok := p.generatedBefore[path]
 	if ok && p.files[path].Existed && !sameDMSource(expected, p.files[path].Before) {
+		if p.saveWarnings != nil {
+			p.saveWarnings[path] = true
+			return nil
+		}
 		return fmt.Errorf("%s contains code changes missing from its workshop project; save stopped to preserve those changes", path)
 	}
 	return nil

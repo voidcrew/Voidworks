@@ -69,4 +69,18 @@ func TestGeneratedRegistrationPreservesManualEdits(t *testing.T) {
 	if !bytes.Equal(after, changed) {
 		t.Fatal("manual code changed")
 	}
+	warnings, e := SaveProjectsWithWarnings([]*Project{reopened})
+	if e != nil || len(warnings) != 1 || warnings[0].Path != path {
+		t.Fatalf("save with warning failed: %+v %v", warnings, e)
+	}
+	backup, e := os.ReadFile(warnings[0].Backup)
+	if e != nil || !bytes.Equal(backup, changed) {
+		t.Fatal("manual code backup missing", e)
+	}
+	if reopened.Modified() {
+		t.Fatal("successful save remains dirty")
+	}
+	if warnings, e = SaveProjectsWithWarnings([]*Project{reopened}); e != nil || len(warnings) != 0 {
+		t.Fatalf("repeat save warned again: %+v %v", warnings, e)
+	}
 }

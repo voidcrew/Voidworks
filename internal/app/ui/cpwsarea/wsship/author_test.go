@@ -11,6 +11,7 @@ import (
 	"sdmm/internal/ship"
 	"sdmm/internal/shippreview"
 	"sdmm/internal/util"
+	"strings"
 	"testing"
 )
 
@@ -378,8 +379,12 @@ func exercisePreviewSaveHook(t *testing.T, ws *WsShip, render func()) {
 	if err = os.WriteFile(path, append(source, []byte("\n// external change\n")...), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if ws.Save() || app.previewRequests != count+1 {
-		t.Fatal("failed save requested preview generation")
+	if !ws.Save() || app.previewRequests != count+2 || !strings.Contains(ws.message, "Warning:") {
+		t.Fatal("external edit prevented save or warning/preview was missing: ", ws.message)
+	}
+	render()
+	if dst := os.Getenv("SHIP_RENDER_TEST_OUTPUT"); dst != "" {
+		captureFrame(t, filepath.Join(dst, "save-external-warning.png"), 1400, 960)
 	}
 	if err = os.WriteFile(path, source, 0600); err != nil {
 		t.Fatal(err)
