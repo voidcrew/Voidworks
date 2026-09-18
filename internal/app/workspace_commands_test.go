@@ -441,5 +441,9 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 	if job, ok := ws.CopyCrewJob(); !ok || job.Name != "Clipboard engineer (copy 3)" {
 		t.Fatal("Edit > Paste did not use the job clipboard", job)
 	}
+	click(imgui.Vec2{X: 390, Y: 322}) // Back to ship before editing map sprites.
+	if ws.EditingCrew() || a.CurrentEditor() == nil || a.CanPaste() {
+		t.Fatal("returning from Crew did not restore the map clipboard target")
+	}
 	exerciseSpritePickerCommands(t, a, frame, capture, click)
 }
