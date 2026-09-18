@@ -25,6 +25,9 @@ func (e *Environment) showNodeMenu(n *treeNode) {
 				if app, ok := e.app.(interface{ DoEditSprite(*dmmprefab.Prefab) }); ok {
 					w.MenuItem("Edit sprite", func() { app.DoEditSprite(dmmap.PrefabStorage.Initial(n.orig.Path)) }).IconEmpty().Build()
 				}
+				if app, ok := e.app.(interface{ DoReplacePrefabSprite(*dmmprefab.Prefab) }); ok {
+					w.MenuItem("Replace sprite", func() { app.DoReplacePrefabSprite(dmmap.PrefabStorage.Initial(n.orig.Path)) }).IconEmpty().Build()
+				}
 			}),
 			w.MenuItem("Find on Map", e.doFindOnMap(n)).
 				Icon(icon.Search).

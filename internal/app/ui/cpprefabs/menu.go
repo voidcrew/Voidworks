@@ -24,6 +24,9 @@ func (p *Prefabs) showContextMenu(node *prefabNode) {
 				if app, ok := p.app.(interface{ DoEditSprite(*dmmprefab.Prefab) }); ok {
 					w.MenuItem("Edit sprite", func() { app.DoEditSprite(node.orig) }).IconEmpty().Build()
 				}
+				if app, ok := p.app.(interface{ DoReplacePrefabSprite(*dmmprefab.Prefab) }); ok {
+					w.MenuItem("Replace sprite", func() { app.DoReplacePrefabSprite(node.orig) }).IconEmpty().Build()
+				}
 			}),
 			w.MenuItem("Search by Type", p.doSearchByTypeOnMap(node)).
 				Icon(icon.Search).

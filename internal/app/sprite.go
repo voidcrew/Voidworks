@@ -1,13 +1,17 @@
 package app
 
 import (
+	"fmt"
 	"github.com/rs/zerolog/log"
 	"path/filepath"
 	"time"
 
 	"sdmm/internal/app/ui/cpwsarea/wssprite"
 	"sdmm/internal/app/ui/dialog"
+	"sdmm/internal/app/ui/spritepicker"
+	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/dmapi/dmmap/dmmdata/dmmprefab"
+	"sdmm/internal/dmapi/dmmap/dmminstance"
 	"sdmm/internal/dmi"
 )
 
@@ -17,6 +21,50 @@ func (a *app) DoNewDMI() {
 		return
 	}
 	a.layout.WsArea.OpenSprite(doc, "", 2)
+}
+
+func (a *app) DoReplaceSprite(instance *dmminstance.Instance, editSource func()) {
+	if instance == nil || a.LoadedEnvironment() == nil {
+		return
+	}
+	if editSource != nil {
+		editSource()
+	}
+	editor := a.CurrentEditor()
+	if editor == nil {
+		return
+	}
+	live := editor.SpriteTarget(instance.Id())
+	if live == nil {
+		dialog.Open(dialog.TypeInformation{Title: "Cannot replace sprite", Information: "Select this object's source map first."})
+		return
+	}
+	original, environment := live.Prefab(), a.LoadedEnvironment()
+	spritepicker.Open(environment.RootDir, original, "Replace this instance · "+editor.Dmm().Name, func(replacement *dmmprefab.Prefab) error {
+		if a.LoadedEnvironment() != environment || a.CurrentEditor() != editor {
+			return fmt.Errorf("The active map changed. Close the picker and select the object again.")
+		}
+		return editor.ReplaceSprite(live.Id(), original, replacement)
+	})
+}
+
+// Palette entries create a new appearance for placement, without replacing
+// every map instance which happens to share the original prefab.
+func (a *app) DoReplacePrefabSprite(original *dmmprefab.Prefab) {
+	environment := a.LoadedEnvironment()
+	if original == nil || environment == nil {
+		return
+	}
+	spritepicker.Open(environment.RootDir, original, "Create a prefab for placement", func(replacement *dmmprefab.Prefab) error {
+		if a.LoadedEnvironment() != environment {
+			return fmt.Errorf("The project changed. Open the picker again.")
+		}
+		prefab := dmmap.PrefabStorage.Put(replacement)
+		a.DoSelectPrefab(prefab)
+		a.DoEditPrefab(prefab)
+		a.SyncPrefabs()
+		return nil
+	})
 }
 
 func (a *app) DoRecoverDMI() {

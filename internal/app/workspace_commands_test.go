@@ -16,6 +16,7 @@ import (
 	"sdmm/internal/app/config"
 	"sdmm/internal/app/prefs"
 	"sdmm/internal/app/ui/cpwsarea/wsmap/tools"
+	"sdmm/internal/app/ui/dialog"
 	"sdmm/internal/app/ui/layout"
 	"sdmm/internal/app/ui/menu"
 	"sdmm/internal/app/ui/shortcut"
@@ -142,6 +143,7 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 		shortcut.Process()
 		a.menu.Process()
 		a.layout.Process()
+		dialog.Process()
 		imgui.Render()
 		platform.Render(imgui.RenderedDrawData())
 		gl.Finish()
@@ -377,4 +379,5 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 		t.Fatal("ship history lost after second tab switch")
 	}
 	capture("verified-commands")
+	exerciseSpritePickerCommands(t, a, frame, capture, click)
 }

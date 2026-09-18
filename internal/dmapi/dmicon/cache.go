@@ -33,6 +33,28 @@ func (i *IconsCache) SetRootDirPath(rootDirPath string) {
 	log.Print("cache root dir:", rootDirPath)
 }
 
+// Invalidate reloads disk data without discarding an open sprite editor's live
+// preview. Both absolute and project-relative cache aliases refer to one file.
+func (i *IconsCache) Invalidate(path string) {
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(i.rootDirPath, path)
+	}
+	key := iconKey(path)
+	for name, icon := range i.icons {
+		full := name
+		if !filepath.IsAbs(full) {
+			full = filepath.Join(i.rootDirPath, full)
+		}
+		if iconKey(full) == key {
+			if icon != nil {
+				icon.free()
+			}
+			delete(i.icons, name)
+		}
+	}
+	LayoutRevision++
+}
+
 func (i *IconsCache) Get(icon string) (*Dmi, error) {
 	if len(icon) == 0 {
 		return nil, errors.New("dmi icon is empty")
