@@ -108,7 +108,7 @@ func (m *Menu) addShortcuts() {
 		FirstKeyAlt: platform.KeyModRight(),
 		SecondKey:   glfw.KeyV,
 		Action:      m.app.DoPaste,
-		IsEnabled:   m.app.Clipboard().HasData,
+		IsEnabled:   m.app.CanPaste,
 	})
 	m.shortcuts.Add(shortcut.Shortcut{
 		Name:        "menu#DoCut",

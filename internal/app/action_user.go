@@ -274,17 +274,29 @@ func (a *app) DoOpenSupport() {
 	}
 }
 
-// DoCopy copies currently selected (hovered) tiles to the global clipboard.
+// DoCopy copies the selected job or map tiles in the active workspace.
 func (a *app) DoCopy() {
 	log.Print("do copy")
+	if ws := a.activeCrewWorkspace(); ws != nil {
+		if job, ok := ws.CopyCrewJob(); ok {
+			a.crewClipboard = &job
+		}
+		return
+	}
 	if ws, ok := a.activeWsMap(); ok {
 		ws.Map().Editor().TileCopySelected()
 	}
 }
 
-// DoPaste pastes tiles from the global clipboard on the currently hovered tile.
+// DoPaste pastes into the active crew roster or map.
 func (a *app) DoPaste() {
 	log.Print("do paste")
+	if ws := a.activeCrewWorkspace(); ws != nil {
+		if a.crewClipboard != nil {
+			ws.PasteCrewJob(*a.crewClipboard)
+		}
+		return
+	}
 	if ws, ok := a.activeWsMap(); ok {
 		ws.Map().Editor().TilePasteSelected()
 		ws.Map().Editor().CommitChanges("Paste Tile")

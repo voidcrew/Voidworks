@@ -209,4 +209,75 @@ func exerciseVariantCrew(t *testing.T, ws *WsShip, render func()) {
 	if jobs, err := reopened.CrewJobs("ship"); err != nil || !reflect.DeepEqual(jobs, baseJobs) {
 		t.Fatal("variant edits changed the shared ship crew", err)
 	}
+	exerciseCrewClipboard(t, ws, render)
+}
+
+func exerciseCrewClipboard(t *testing.T, ws *WsShip, render func()) {
+	t.Helper()
+	p := ws.project
+	ws.loadCrewScope("module/medical")
+	ws.crew.jobs[0].Slots = 3
+	ws.crew.jobs[0].Equipment = map[string]string{"head": ""}
+	ws.crew.jobs[0].Backpack = map[string]int{"/obj/item/crowbar": 2}
+	ws.crew.jobs[0].Belt = map[string]int{"/obj/item/crowbar": 1}
+	ws.crew.jobs[0].Extra = map[string]string{"custom": "1"}
+	ws.crew.dirty = true
+	copied, ok := ws.CopyCrewJob()
+	if !ok || copied.Slots != 3 || copied.ID != "" {
+		t.Fatal("copy did not include the selected job's pending edits")
+	}
+	ws.crew.jobs[0].Backpack["/obj/item/crowbar"] = 5
+	ws.crew.jobs[0].Name = "Changed source"
+	ws.crew.dirty = true
+	if !ws.commitCrew() || copied.Backpack["/obj/item/crowbar"] != 2 {
+		t.Fatal("source changes mutated the copied job")
+	}
+	ws.finishTask()
+	ws.beginCrew()
+	ws.loadCrewScope("module/variant_engineering")
+	scope := ws.crew.scope
+	before := len(ws.crew.jobs)
+	if !ws.PasteCrewJob(copied) || len(ws.crew.jobs) != before+1 || ws.crew.selected != before {
+		t.Fatal("could not paste across modules and themes", ws.crew.error)
+	}
+	job := ws.crew.jobs[before]
+	if job.Name != copied.Name || job.Slots != 3 || job.ID == "" || !reflect.DeepEqual(job.Equipment, copied.Equipment) || !reflect.DeepEqual(job.Backpack, copied.Backpack) || !reflect.DeepEqual(job.Belt, copied.Belt) || !reflect.DeepEqual(job.Extra, copied.Extra) || p.CrewOutfit(job) != copied.Outfit {
+		t.Fatal("paste lost job settings", job)
+	}
+	ws.app.CommandStorage().Undo()
+	if len(ws.crew.jobs) != before || ws.crew.scope != scope {
+		t.Fatal("paste undo did not restore the destination roster")
+	}
+	ws.app.CommandStorage().Redo()
+	if len(ws.crew.jobs) != before+1 || ws.crew.jobs[before].ID != job.ID {
+		t.Fatal("paste redo did not restore the job")
+	}
+	if !ws.PasteCrewJob(copied) || ws.crew.jobs[before+1].Name != copied.Name+" (copy)" || ws.crew.jobs[before+1].ID == job.ID {
+		t.Fatal("repeated paste did not create an independent job")
+	}
+	ws.crew.jobs[before+1].Name, ws.crew.dirty = "", true
+	if ws.PasteCrewJob(copied) || !ws.crew.dirty || len(ws.crew.jobs) != before+2 {
+		t.Fatal("paste discarded an invalid unfinished job")
+	}
+	ws.loadCrewScope(scope)
+	render()
+	if !ws.Save() {
+		t.Fatal(ws.message)
+	}
+	fresh, err := dmenv.New(p.Dme.RootFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := ship.OpenProject(ws.catalog, fresh, p.Hull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := reopened.CrewJobs(scope)
+	if err != nil || len(jobs) != len(ws.crew.jobs) || !reflect.DeepEqual(jobs[before:], ws.crew.jobs[before:]) {
+		t.Fatalf("pasted jobs did not survive save/reopen: got %#v, want %#v; %v", jobs, ws.crew.jobs, err)
+	}
+	source, err := reopened.CrewJobs(p.RoomCrewScope("medical", p.Hull.Themes[0].ID))
+	if err != nil || source[0].Name != "Changed source" || source[0].Backpack["/obj/item/crowbar"] != 5 {
+		t.Fatal("pasting changed the source job", err)
+	}
 }

@@ -22,6 +22,7 @@ import (
 	"sdmm/internal/dmapi/dmenv"
 	"sdmm/internal/dmapi/dmmclip"
 	"sdmm/internal/env"
+	"sdmm/internal/ship"
 	"sdmm/internal/shippreview"
 	"sdmm/internal/startup"
 
@@ -103,6 +104,7 @@ type app struct {
 
 	commandStorage *command.Storage
 	clipboard      *dmmclip.Clipboard
+	crewClipboard  *ship.CrewJob
 
 	menu   *menu.Menu
 	layout *layout.Layout

@@ -8,6 +8,39 @@ import (
 	"sdmm/internal/ship"
 )
 
+func (ws *WsShip) EditingCrew() bool {
+	return ws.project != nil && ws.stage == stepBuild && ws.task == taskCrew &&
+		!ws.wizard && !ws.invalid && len(ws.recovery.pending) == 0
+}
+
+func (ws *WsShip) CopyCrewJob() (ship.CrewJob, bool) {
+	if !ws.EditingCrew() || !ws.commitCrew() || ws.crew.selected < 0 || ws.crew.selected >= len(ws.crew.jobs) {
+		return ship.CrewJob{}, false
+	}
+	job := ship.CloneCrewJobs(ws.crew.jobs[ws.crew.selected : ws.crew.selected+1])[0]
+	job.ID, job.Outfit = "", ws.project.CrewOutfit(job)
+	return job, true
+}
+
+func (ws *WsShip) PasteCrewJob(job ship.CrewJob) bool {
+	if !ws.EditingCrew() || !ws.commitCrew() {
+		return false
+	}
+	selected := -1
+	ws.message = ""
+	ws.change("Paste crew job", func() (err error) {
+		selected, err = ws.project.PasteCrewJob(ws.crew.scope, job)
+		return err
+	})
+	if ws.message != "" {
+		ws.crew.error = ws.message
+		return false
+	}
+	ws.loadCrewScope(ws.crew.scope)
+	ws.crew.selected = selected
+	return true
+}
+
 func (ws *WsShip) roomCrewCopyControls() {
 	c := &ws.crew
 	if len(ws.project.Hull.Themes) > 0 && !ws.project.SupportsRoomCrewVariants() {

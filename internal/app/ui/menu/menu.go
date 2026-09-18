@@ -89,6 +89,7 @@ type app interface {
 
 	HasActiveMap() bool
 	HasSaveableWorkspace() bool
+	CanPaste() bool
 
 	PathsFilter() *dm.PathsFilter
 	CommandStorage() *command.Storage
@@ -211,7 +212,7 @@ func (m *Menu) Process() {
 				Shortcut(platform.KeyModName(), "C"),
 			w.MenuItem("Paste", m.app.DoPaste).
 				Icon(icon.ContentPaste).
-				Enabled(m.app.Clipboard().HasData()).
+				Enabled(m.app.CanPaste()).
 				Shortcut(platform.KeyModName(), "V"),
 			w.MenuItem("Cut", m.app.DoCut).
 				Icon(icon.ContentCut).
