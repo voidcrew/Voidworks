@@ -22,6 +22,8 @@ type ToolMove struct {
 	lastMouseCoords imgui.Vec2
 	lastOffsets     [2]int
 	initialPrefab   *dmmprefab.Prefab
+	pixelOffset     [2]int
+	offsetAxes      [2]string
 }
 
 func (ToolMove) Name() string {
@@ -45,14 +47,18 @@ func (t *ToolMove) onStart(util.Point) {
 		ed.InstanceSelect(hoveredInstance)
 		t.instance = hoveredInstance
 		t.initialPrefab = hoveredInstance.Prefab()
+		t.pixelOffset = [2]int{}
+		t.offsetAxes = [2]string{"pixel_x", "pixel_y"}
 		t.lastMouseCoords = imgui.MousePos()
 		vars := t.instance.Prefab().Vars()
 		switch ed.Prefs().Editor.NudgeMode {
 		case prefs.SaveNudgeModePixel:
 			t.lastOffsets = [2]int{vars.IntV("pixel_x", 0), vars.IntV("pixel_y", 0)}
 		case prefs.SaveNudgeModeStep:
+			t.offsetAxes = [2]string{"step_x", "step_y"}
 			t.lastOffsets = [2]int{vars.IntV("step_x", 0), vars.IntV("step_y", 0)}
 		case prefs.SaveNudgeModePixelAlt:
+			t.offsetAxes = [2]string{"pixel_w", "pixel_z"}
 			t.lastOffsets = [2]int{vars.IntV("pixel_w", 0), vars.IntV("pixel_z", 0)}
 		}
 	}
@@ -62,40 +68,15 @@ func (t *ToolMove) process() {
 	if t.instance == nil || !imguiext.IsShiftDown() {
 		return
 	}
-	xAxis := "pixel_x"
-	yAxis := "pixel_y"
-	if ed.Prefs().Editor.NudgeMode == prefs.SaveNudgeModeStep {
-		xAxis = "step_x"
-		yAxis = "step_y"
-	} else if ed.Prefs().Editor.NudgeMode == prefs.SaveNudgeModePixelAlt {
-		xAxis = "pixel_w"
-		yAxis = "pixel_z"
-	}
 	mouseCoords := imgui.MousePos()
 	offsetX := (mouseCoords.X - t.lastMouseCoords.X) / ed.ZoomLevel()
 	offsetY := (t.lastMouseCoords.Y - mouseCoords.Y) / ed.ZoomLevel()
-	x, y := t.lastOffsets[0]+int(offsetX), t.lastOffsets[1]+int(offsetY)
-	currentVars := t.instance.Prefab().Vars()
-	if currentVars.IntV(xAxis, 0) == x && currentVars.IntV(yAxis, 0) == y {
+	nextOffset := [2]int{int(offsetX), int(offsetY)}
+	if t.pixelOffset == nextOffset {
 		return
 	}
-
-	// Derive every preview from the starting prefab so returning to the start
-	// restores its exact overrides, including inherited offsets.
-	prefab := t.initialPrefab
-	newVars := prefab.Vars()
-	if x != t.lastOffsets[0] {
-		newVars = dmvars.Set(newVars, xAxis, strconv.Itoa(x))
-	}
-	if y != t.lastOffsets[1] {
-		newVars = dmvars.Set(newVars, yAxis, strconv.Itoa(y))
-	}
-	if newVars != prefab.Vars() {
-		prefab = dmmprefab.New(dmmprefab.IdNone, prefab.Path(), newVars)
-	}
-	t.instance.SetPrefab(prefab)
-
-	ed.UpdateCanvasByCoords([]util.Point{t.instance.Coord()})
+	t.pixelOffset = nextOffset
+	ed.PreviewPixelOffset(t.instance, nextOffset[0], nextOffset[1])
 }
 
 func (t *ToolMove) onMove(coord util.Point) {
@@ -118,11 +99,29 @@ func (t *ToolMove) onMove(coord util.Point) {
 		}
 	}
 	ed.UpdateCanvasByCoords([]util.Point{coord})
+	// Shift can be released while the mouse is still held, changing to a tile
+	// move. Keep the temporary pixel preview attached to the new instance.
+	if t.pixelOffset != [2]int{} {
+		ed.PreviewPixelOffset(t.instance, t.pixelOffset[0], t.pixelOffset[1])
+	}
 }
 
 func (t *ToolMove) onStop(util.Point) {
 	if t.instance == nil {
 		return
+	}
+	ed.ClearPixelOffsetPreview()
+	if t.pixelOffset != [2]int{} {
+		vars := t.initialPrefab.Vars()
+		for axis, delta := range t.pixelOffset {
+			if delta != 0 {
+				vars = dmvars.Set(vars, t.offsetAxes[axis], strconv.Itoa(t.lastOffsets[axis]+delta))
+			}
+		}
+		t.instance.SetPrefab(dmmprefab.New(dmmprefab.IdNone, t.initialPrefab.Path(), vars))
+		// Refresh once on release so the settled sprite replaces the preview
+		// immediately, including ordinary maps with asynchronous history commits.
+		ed.UpdateCanvasByCoords([]util.Point{t.instance.Coord()})
 	}
 	//remove other turfs if we moved a turf
 	if t.lastTile != nil {

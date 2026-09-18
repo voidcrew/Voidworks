@@ -8,6 +8,14 @@ import (
 	"sdmm/internal/dmapi/dmmap/dmminstance"
 )
 
+func (e *Editor) PreviewPixelOffset(i *dmminstance.Instance, x, y int) {
+	e.pMap.Canvas().Render().PreviewPixelOffset(i.Id(), e.pMap.MapToView(i.Coord()), x, y)
+}
+
+func (e *Editor) ClearPixelOffsetPreview() {
+	e.pMap.Canvas().Render().ClearPixelOffsetPreview()
+}
+
 // InstanceSelect selects the provided instance to edit.
 func (e *Editor) InstanceSelect(i *dmminstance.Instance) {
 	e.app.DoSelectPrefab(i.Prefab())

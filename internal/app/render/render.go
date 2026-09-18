@@ -18,6 +18,7 @@ type Render struct {
 	overlay         overlay
 	unitProcessor   unitProcessor
 	previewLighting *mappreview.Lighting
+	pixelPreview    pixelOffsetPreview
 }
 
 func New() *Render {

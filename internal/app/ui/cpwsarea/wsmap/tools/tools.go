@@ -58,6 +58,8 @@ type editor interface {
 
 	InstanceSelect(i *dmminstance.Instance)
 	InstanceDelete(i *dmminstance.Instance)
+	PreviewPixelOffset(i *dmminstance.Instance, x, y int)
+	ClearPixelOffsetPreview()
 
 	TileReplace(coord util.Point, prefabs dmmdata.Prefabs)
 
@@ -80,14 +82,14 @@ var (
 	pressHandled bool
 
 	tools = map[string]Tool{
-		TNAdd:     newAdd(),
-		TNFill:    newFill(),
-		TNGrab:    newGrab(),
-		TNMove:    newMove(),
-		TNPick:    newPick(),
-		TNDelete:  newDelete(),
-		TNReplace: newReplace(),
-		TNRegion:  &ToolRegion{},
+		TNAdd:       newAdd(),
+		TNFill:      newFill(),
+		TNGrab:      newGrab(),
+		TNMove:      newMove(),
+		TNPick:      newPick(),
+		TNDelete:    newDelete(),
+		TNReplace:   newReplace(),
+		TNRegion:    &ToolRegion{},
 		TNRoomShape: newRoomShape(),
 	}
 

@@ -35,6 +35,12 @@ func (u Unit) ViewBounds() util.Bounds {
 	return u.viewBounds
 }
 
+// WithOffset returns a visual copy so a drag never alters the cached unit.
+func (u Unit) WithOffset(x, y float32) Unit {
+	u.viewBounds = u.viewBounds.Plus(x, y)
+	return u
+}
+
 func (u Unit) R() float32 {
 	return u.r
 }

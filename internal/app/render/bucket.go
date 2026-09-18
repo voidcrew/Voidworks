@@ -44,12 +44,15 @@ func (r *Render) batchLevel(level int, viewBounds util.Bounds, withUnitHighlight
 		// Iterate through chunks with units on the rendered layer.
 		for _, chunk := range visibleLevel.ChunksByLayers[layer] {
 			// Out of bounds = skip.
-			if !chunk.ViewBounds.ContainsV(viewBounds) {
+			previewInChunk := r.pixelPreview.id != 0 && r.pixelPreview.coord.Z == level &&
+				chunk.MapBounds.Contains(float32(r.pixelPreview.coord.X), float32(r.pixelPreview.coord.Y))
+			if !previewInChunk && !chunk.ViewBounds.ContainsV(viewBounds) {
 				continue
 			}
 
 			// Get all units in the chunk for the specific layer.
 			for _, u := range chunk.UnitsByLayers[layer] {
+				u = r.previewUnit(u)
 				// Out of bounds = skip
 				if !u.ViewBounds().ContainsV(viewBounds) {
 					continue

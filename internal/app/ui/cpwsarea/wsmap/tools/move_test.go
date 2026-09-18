@@ -25,6 +25,8 @@ type moveEditor struct {
 	preferences        prefs.Prefs
 	snapshot           *dmmsnap.DmmSnap
 	refreshes, commits int
+	previews           int
+	previewX, previewY int
 	view               *dmmap.Dmm
 }
 
@@ -33,6 +35,11 @@ func (e *moveEditor) HoveredInstance() *dmminstance.Instance { return e.instance
 func (e *moveEditor) InstanceSelect(i *dmminstance.Instance) { e.selected = i }
 func (e *moveEditor) ZoomLevel() float32                     { return 2 }
 func (e *moveEditor) Prefs() prefs.Prefs                     { return e.preferences }
+func (e *moveEditor) PreviewPixelOffset(_ *dmminstance.Instance, x, y int) {
+	e.previews++
+	e.previewX, e.previewY = x, y
+}
+func (e *moveEditor) ClearPixelOffsetPreview() { e.previewX, e.previewY = 0, 0 }
 func (e *moveEditor) CommitChanges(string) {
 	_, changed := e.snapshot.Commit()
 	if len(changed) != 0 {
@@ -91,21 +98,27 @@ func TestMoveDragOnlyPersistsReleasedOffset(t *testing.T) {
 				for n := 1; n <= 40; n++ {
 					io.SetMousePosition(imgui.Vec2{X: 100 - float32(n)*2, Y: 100 - float32(n)*4})
 					m.process()
+					if e.instance.Prefab() != original || e.refreshes != 0 {
+						t.Fatal("pixel drag changed map data or rebuilt the canvas before release")
+					}
 					if got := len(dmmap.PrefabStorage.GetAllByPath(original.Path())); got != 1 {
 						t.Fatalf("drag step %d persisted %d prefabs before release, want original only", n, got)
 					}
-					if workshop && e.view.GetTile(at(1, 1)).Instances()[0].Prefab().Id() != e.instance.Prefab().Id() {
+					if e.previewX != -n || e.previewY != 2*n {
 						t.Fatal("live preview lost current offset")
 					}
-				}
-				final := e.instance.Prefab()
-				if final.Vars().IntV(axes[0], 0) != -40 || final.Vars().IntV(axes[1], 0) != 80 {
-					t.Fatalf("incorrect zoomed offset: %v", final.Vars())
 				}
 				if e.commits != 0 {
 					t.Fatal("drag committed before release")
 				}
 				m.onStop(at(1, 1))
+				final := e.instance.Prefab()
+				if final.Vars().IntV(axes[0], 0) != -40 || final.Vars().IntV(axes[1], 0) != 80 {
+					t.Fatalf("incorrect zoomed offset: %v", final.Vars())
+				}
+				if e.previewX != 0 || e.previewY != 0 {
+					t.Fatal("release left a temporary preview offset active")
+				}
 				if e.commits != 1 || len(dmmap.PrefabStorage.GetAllByPath(original.Path())) != 2 {
 					t.Fatal("release must save one final prefab and one history entry")
 				}
@@ -130,7 +143,7 @@ func TestMoveStationaryAndReturnedDragDoNotCreateChanges(t *testing.T) {
 	for n := 0; n < 60; n++ {
 		m.process()
 	}
-	if e.refreshes != 0 {
+	if e.refreshes != 0 || e.previews != 0 {
 		t.Fatalf("stationary drag refreshed canvas %d times", e.refreshes)
 	}
 	io := imgui.CurrentIO()
@@ -139,8 +152,8 @@ func TestMoveStationaryAndReturnedDragDoNotCreateChanges(t *testing.T) {
 	for n := 0; n < 60; n++ {
 		m.process()
 	}
-	if e.refreshes != 1 {
-		t.Fatalf("unchanged offset refreshed canvas %d times", e.refreshes)
+	if e.refreshes != 0 || e.previews != 1 {
+		t.Fatalf("unchanged offset rebuilt canvas %d times, preview updates %d", e.refreshes, e.previews)
 	}
 	io.SetMousePosition(imgui.Vec2{X: 100, Y: 100})
 	m.process()
@@ -162,14 +175,73 @@ func TestMovePreservesExistingAndInheritedOffsets(t *testing.T) {
 	io := imgui.CurrentIO()
 	io.SetMousePosition(imgui.Vec2{X: 90, Y: 100})
 	m.process()
+	if e.instance.Prefab() != original || e.previewX != -5 || e.previewY != 0 {
+		t.Fatal("drag changed source overrides before release or lost inherited offset preview")
+	}
+	m.onStop(at(1, 1))
 	changed := e.instance.Prefab().Vars()
 	if changed.IntV("pixel_w", 0) != 4 || changed.IntV("pixel_z", 0) != -3 || changed.IntV("dir", 0) != 8 {
 		t.Fatal("drag lost existing overrides or inherited offsets")
 	}
+	// Returning a second drag to its starting position must be a no-op too.
+	e.commits = 0
+	m.onStart(at(1, 1))
+	start := e.instance.Prefab()
 	io.SetMousePosition(imgui.Vec2{X: 100, Y: 100})
 	m.process()
+	io.SetMousePosition(imgui.Vec2{X: 90, Y: 100})
+	m.process()
 	m.onStop(at(1, 1))
-	if e.instance.Prefab().Id() != original.Id() || e.commits != 0 {
+	if e.instance.Prefab() != start || e.commits != 0 {
 		t.Fatal("returning to inherited offset created an unnecessary override")
+	}
+}
+
+func TestPixelMoveRegistersOncePerMouseStroke(t *testing.T) {
+	for _, interruption := range []string{"release", "refocus", "save", "disable"} {
+		t.Run(interruption, func(t *testing.T) {
+			m, e, original := moveFixture(t, prefs.SaveNudgeModePixelAlt, false)
+			previousCC, previousCS := cc, cs
+			previousActive, previousEnabled, previousHandled := active, enabled, pressHandled
+			previousTools, previousSelected, previousStarted := tools, selectedToolName, startedTool
+			defer func() {
+				cc, cs = previousCC, previousCS
+				active, enabled, pressHandled = previousActive, previousEnabled, previousHandled
+				tools, selectedToolName, startedTool = previousTools, previousSelected, previousStarted
+			}()
+			control := &fillControl{dragging: true}
+			cc, cs = control, &fillState{coord: at(1, 1)}
+			tools, selectedToolName, startedTool = map[string]Tool{TNMove: m}, TNMove, m
+			active, enabled, pressHandled = true, true, true
+			imgui.CurrentIO().SetMousePosition(imgui.Vec2{X: 112, Y: 96})
+			for n := 0; n < 5; n++ {
+				process(false)
+			}
+			if e.commits != 0 || e.instance.Prefab() != original || e.refreshes != 0 {
+				t.Fatal("held mouse stroke registered a change before release")
+			}
+			switch interruption {
+			case "refocus":
+				SetEditor(e)
+				if e.commits != 0 {
+					t.Fatal("refocus ended a held pixel drag")
+				}
+			case "save":
+				FinishStroke()
+			case "disable":
+				SetEnabled(false)
+				SetEnabled(true)
+			}
+			for n := 0; n < 5; n++ {
+				process(false)
+			}
+			control.dragging = false
+			for n := 0; n < 5; n++ {
+				process(false)
+			}
+			if e.commits != 1 || e.previewX != 0 || e.previewY != 0 || len(dmmap.PrefabStorage.GetAllByPath(original.Path())) != 2 {
+				t.Fatal("completed pixel stroke must clear preview and register one final change")
+			}
+		})
 	}
 }
