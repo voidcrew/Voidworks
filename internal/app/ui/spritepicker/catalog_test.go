@@ -25,10 +25,10 @@ func TestSavedUnreferencedDMIsAreDiscovered(t *testing.T) {
 		write(path)
 	}
 	files, err := scanDMIs(root)
-	want := []string{"icons/Alpha.DMI", "icons/alpha.dmi", "icons/zebra.dmi", "new art/fresh.dmi"}
+	want := []string{"icons/Alpha.DMI", "icons/alpha.dmi", "new art/fresh.dmi", "icons/zebra.dmi"}
 	// Windows has case-insensitive filenames.
 	if _, err := os.Stat(filepath.Join(root, "icons/ALPHA.DMI")); err == nil {
-		want = []string{"icons/Alpha.DMI", "icons/zebra.dmi", "new art/fresh.dmi"}
+		want = []string{"icons/Alpha.DMI", "new art/fresh.dmi", "icons/zebra.dmi"}
 	}
 	if err != nil || !reflect.DeepEqual(files, want) {
 		t.Fatal(files, err)

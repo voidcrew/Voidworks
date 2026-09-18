@@ -67,7 +67,17 @@ func scanDMIs(root string) ([]string, error) {
 		}
 		return nil
 	})
-	alphabetical(files)
+	sort.Slice(files, func(i, j int) bool {
+		a, b := strings.ToLower(filepath.Base(files[i])), strings.ToLower(filepath.Base(files[j]))
+		if a != b {
+			return a < b
+		}
+		a, b = strings.ToLower(files[i]), strings.ToLower(files[j])
+		if a != b {
+			return a < b
+		}
+		return files[i] < files[j]
+	})
 	return files, err
 }
 
