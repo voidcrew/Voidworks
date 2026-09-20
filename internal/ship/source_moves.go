@@ -247,10 +247,10 @@ func (p *Project) prepareLoadedShipRename(name string) error {
 		if strings.HasSuffix(file, ".areas.json") {
 			ext = ".areas.json"
 		}
-		to := filepath.Join(filepath.Dir(file), fileName(name)+ext)
+		to := filepath.Join(filepath.Dir(file), name+ext)
 		// Several dedicated files can live in one directory; preserve each role.
 		if prior := used[strings.ToLower(to)]; prior != "" && prior != file {
-			to = filepath.Join(filepath.Dir(file), fileName(name)+"_"+strings.TrimSuffix(filepath.Base(file), ext)+ext)
+			to = filepath.Join(filepath.Dir(file), name+"_"+strings.TrimSuffix(filepath.Base(file), ext)+ext)
 		}
 		if prior := used[strings.ToLower(to)]; prior != "" && prior != file {
 			return fmt.Errorf("two source files would use %s", to)

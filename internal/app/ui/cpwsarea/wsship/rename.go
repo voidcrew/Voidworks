@@ -13,7 +13,7 @@ func (ws *WsShip) beginRename(task buildTask, id, name string) {
 	ws.itemID, ws.itemName = id, name
 	ws.renameOriginal = name
 	ws.itemDescription = ""
-	if task != taskRenameRoom && task != taskRenameShip {
+	if task != taskRenameRoom && task != taskRenameShip && task != taskRenameShipFiles {
 		ws.itemDescription = ws.project.Description(ws.renameScope())
 	}
 	ws.descriptionOriginal = ws.itemDescription
@@ -30,8 +30,12 @@ func (ws *WsShip) renameControls() {
 	if ws.task == taskRenameShip {
 		heading("RENAME SHIP")
 		textField("Ship name", "Name shown to players", &ws.itemName)
-		hint("Renames this ship's maps and dedicated source files together. Shared files stay available to other ships; game IDs stay the same.")
-		hint("Review the changed files before saving. Undo also restores filenames.")
+		hint("Changes the name shown to players. Filenames and game IDs stay the same.")
+	} else if ws.task == taskRenameShipFiles {
+		heading("RENAME SHIP FILES")
+		textField("File name prefix", "e.g. salvage_ship", &ws.itemName)
+		hint("Moves this ship's maps and dedicated source files and updates their references. Shared files remain available to other ships.")
+		hint("The player-facing ship name and game IDs stay the same. Review the file changes before saving.")
 	} else if ws.task == taskRenameRoom {
 		heading("MODULE NAME")
 		if textField("Module name", "e.g. Cargo bay", &ws.itemName) {
@@ -45,7 +49,7 @@ func (ws *WsShip) renameControls() {
 		heading("MODULE OPTION DETAILS")
 		textField("Module option name", "e.g. Medical bay", &ws.itemName)
 	}
-	if ws.task != taskRenameRoom && ws.task != taskRenameShip {
+	if ws.task != taskRenameRoom && ws.task != taskRenameShip && ws.task != taskRenameShipFiles {
 		descriptionField(&ws.itemDescription)
 	}
 	nameErr := ws.renameNameError()
@@ -57,6 +61,9 @@ func (ws *WsShip) renameControls() {
 	label := "Apply details"
 	if ws.task == taskRenameShip {
 		label = "Rename ship"
+	}
+	if ws.task == taskRenameShipFiles {
+		label = "Review file changes"
 	}
 	if ws.task == taskRenameRoom {
 		label = "Rename module"
@@ -71,13 +78,17 @@ func (ws *WsShip) renameControls() {
 }
 
 func (ws *WsShip) applyRename() {
+	files := ws.task == taskRenameShipFiles
 	if ws.commitRename() {
 		ws.task = taskPaint
+		if files {
+			ws.setStage(stepReview)
+		}
 	}
 }
 
 func (ws *WsShip) renamePending() bool {
-	return (ws.task == taskRenameTheme || ws.task == taskRenameModule || ws.task == taskRenameRoom || ws.task == taskRenameShip) &&
+	return (ws.task == taskRenameTheme || ws.task == taskRenameModule || ws.task == taskRenameRoom || ws.task == taskRenameShip || ws.task == taskRenameShipFiles) &&
 		(strings.TrimSpace(ws.itemName) != ws.renameOriginal || ws.itemDescription != ws.descriptionOriginal)
 }
 
@@ -89,9 +100,13 @@ func (ws *WsShip) commitRename() bool {
 	if !ws.renamePending() {
 		return true
 	}
-	if ws.task == taskRenameShip {
+	if ws.task == taskRenameShip || ws.task == taskRenameShipFiles {
 		ws.message = ""
-		ws.change("Rename ship", func() error { return ws.project.RenameShip(ws.itemName) })
+		if ws.task == taskRenameShipFiles {
+			ws.change("Rename ship files", func() error { return ws.project.RenameShipFiles(ws.itemName) })
+		} else {
+			ws.change("Rename ship", func() error { return ws.project.RenameShip(ws.itemName) })
+		}
 		if ws.message != "" {
 			return false
 		}
@@ -131,6 +146,9 @@ func descriptionField(value *string) {
 }
 
 func (ws *WsShip) renameNameError() error {
+	if ws.task == taskRenameShipFiles {
+		return ship.ValidID(strings.TrimSpace(ws.itemName))
+	}
 	if ws.task == taskRenameShip {
 		return ship.ShipNameError(ws.catalog, ws.app.LoadedEnvironment(), ws.itemName, ws.project.Hull.Type)
 	}

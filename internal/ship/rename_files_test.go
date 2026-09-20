@@ -37,7 +37,7 @@ func TestRenameShipFilesSaveReopenAndUndo(t *testing.T) {
 			original[path], _ = os.ReadFile(path)
 		}
 	}
-	if err = p.RenameShip("New Explorer"); err != nil {
+	if err = p.renameShipAndFiles("New Explorer"); err != nil {
 		t.Fatal(err)
 	}
 	if p.Hull.Type != before.Hull.Type || p.Settings.ID != "original" {
@@ -132,7 +132,7 @@ func TestSaveFleetWithRenamedShipDoesNotRestoreOldIncludes(t *testing.T) {
 	if err = SaveProjects([]*Project{p, q}); err != nil {
 		t.Fatal(err)
 	}
-	if err = p.RenameShip("Explorer"); err != nil {
+	if err = p.renameShipAndFiles("Explorer"); err != nil {
 		t.Fatal(err)
 	}
 	if err = q.SetPartCosts("ship", PartCosts{"misc": 8}); err != nil {
@@ -163,7 +163,7 @@ func TestRepeatedShipRenameCanReturnToSavedFilename(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"Explorer", "Original", "Explorer", "Final Name"} {
-		if err = p.RenameShip(name); err != nil {
+		if err = p.renameShipAndFiles(name); err != nil {
 			t.Fatalf("rename to %s: %v", name, err)
 		}
 	}
@@ -178,4 +178,18 @@ func TestRepeatedShipRenameCanReturnToSavedFilename(t *testing.T) {
 			t.Fatal("intermediate name remains on disk")
 		}
 	}
+}
+
+// Preserve coverage of a mapper explicitly changing both labels and files.
+func (p *Project) renameShipAndFiles(name string) (err error) {
+	before := p.Capture()
+	defer func() {
+		if err != nil {
+			p.Restore(before)
+		}
+	}()
+	if err = p.RenameShip(name); err != nil {
+		return err
+	}
+	return p.RenameShipFiles(fileName(name))
 }

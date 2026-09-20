@@ -91,7 +91,7 @@ func TestShipVisibilityAfterReopeningWithLoadedEnvironment(t *testing.T) {
 		}
 		p = reopened
 	}
-	if err := p.RenameShip("Renamed hidden ship"); err != nil {
+	if err := p.renameShipAndFiles("Renamed hidden ship"); err != nil {
 		t.Fatal(err)
 	}
 	if err := p.Save(); err != nil {
@@ -122,7 +122,7 @@ func TestLoadedShipRenameFilesRecoveryAndHistory(t *testing.T) {
 		original[file], _ = os.ReadFile(file)
 	}
 	before := p.Capture()
-	if err := p.RenameShip("New Explorer"); err != nil {
+	if err := p.renameShipAndFiles("New Explorer"); err != nil {
 		t.Fatal(err)
 	}
 	if p.Hull.Type != before.Hull.Type || p.Settings != nil {
@@ -197,7 +197,7 @@ func TestLoadedShipRenameFilesRecoveryAndHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = recovered.RenameShip("Final Ship"); err != nil {
+	if err = recovered.renameShipAndFiles("Final Ship"); err != nil {
 		t.Fatal(err)
 	}
 	if err = recovered.Save(); err != nil {
@@ -220,13 +220,13 @@ func TestLoadedShipRenameCollisionAndExternalEdit(t *testing.T) {
 	if err := os.WriteFile(target, []byte("another ship"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.RenameShip("Existing"); err == nil {
+	if err := p.renameShipAndFiles("Existing"); err == nil {
 		t.Fatal("accepted source collision")
 	}
 	if p.Modified() {
 		t.Fatal("failed rename changed project")
 	}
-	if err := p.RenameShip("Explorer"); err != nil {
+	if err := p.renameShipAndFiles("Explorer"); err != nil {
 		t.Fatal(err)
 	}
 	file, _ := p.roomTypeFile(p.Hull.Type)
@@ -297,7 +297,7 @@ func TestLoadedRenameReparseAndHiddenDiscovery(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(p.Catalog.Root, "modules.toml"), []byte("directory = \"_maps/voidcrew/ship_modules/\"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.RenameShip("Reparsed Ship"); err != nil {
+	if err := p.renameShipAndFiles("Reparsed Ship"); err != nil {
 		t.Fatal(err)
 	}
 	if err := p.SetShipDetails(ShipDetails{Description: "Hidden but editable", Hidden: true}); err != nil {
@@ -318,7 +318,7 @@ func TestLoadedRenameReparseAndHiddenDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := recovered.RenameShip("Recovered Name"); err != nil {
+	if err := recovered.renameShipAndFiles("Recovered Name"); err != nil {
 		t.Fatal("recovery with refreshed environment:", err)
 	}
 	catalog, err := Discover(env)
@@ -341,7 +341,7 @@ func TestLoadedRenameReparseAndHiddenDiscovery(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := reopened.RenameShip("Second Name"); err != nil {
+	if err := reopened.renameShipAndFiles("Second Name"); err != nil {
 		t.Fatal(err)
 	}
 	if err := reopened.Save(); err != nil {
@@ -378,7 +378,7 @@ func TestDetailsUndoWithCrewAndPricesRemovesMetadata(t *testing.T) {
 	if err := p.SetShipDetails(ShipDetails{Description: "Temporary", Hidden: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.RenameShip("Temporary Name"); err != nil {
+	if err := p.renameShipAndFiles("Temporary Name"); err != nil {
 		t.Fatal(err)
 	}
 	if err := p.Save(); err != nil {
@@ -411,7 +411,7 @@ func TestLoadedRenameKeepsSharedSourcesAndMaps(t *testing.T) {
 	vars.Put("suffix", dmQuote(p.Hull.Themes[0].Suffix))
 	other := HullType + "/hidden_neighbor"
 	p.Dme.Objects[other] = &dmenv.Object{Path: other, Vars: vars.ToImmutable()}
-	if err := p.RenameShip("Shared Explorer"); err != nil {
+	if err := p.renameShipAndFiles("Shared Explorer"); err != nil {
 		t.Fatal(err)
 	}
 	if err := p.Save(); err != nil {
@@ -442,7 +442,7 @@ func TestLoadedRenameRespectsOpenMapAndNestedIncludes(t *testing.T) {
 		}
 		return nil
 	}
-	if err := p.RenameShip("Busy Ship"); err == nil || p.Modified() {
+	if err := p.renameShipAndFiles("Busy Ship"); err == nil || p.Modified() {
 		t.Fatal("renamed an open map or changed state on failure", err)
 	}
 	p.BeforeOpen = nil
@@ -463,7 +463,7 @@ func TestLoadedRenameRespectsOpenMapAndNestedIncludes(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := q.Capture()
-	if err := q.RenameShip("Nested Ship"); err != nil {
+	if err := q.renameShipAndFiles("Nested Ship"); err != nil {
 		t.Fatal(err)
 	}
 	if err := q.Save(); err != nil {
@@ -490,7 +490,7 @@ func TestLoadedRenameWithNewModulesAndFleetSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := p.RenameShip("Explorer"); err != nil {
+	if err := p.renameShipAndFiles("Explorer"); err != nil {
 		t.Fatal(err)
 	}
 	if err := p.AddModule(0, p.Hull.Modules[0], "extra", "Extra option", false); err != nil {
@@ -562,7 +562,7 @@ func TestFleetShipDetailsAndRename(t *testing.T) {
 		if err = p.SetShipDetails(ShipDetails{Description: "Updated description"}); err != nil {
 			t.Fatalf("%s details: %v", hull.Name, err)
 		}
-		if err = p.RenameShip("Rename Audit " + hull.Name); err != nil {
+		if err = p.renameShipAndFiles("Rename Audit " + hull.Name); err != nil {
 			t.Fatalf("%s rename: %v", hull.Name, err)
 		}
 		changes, err := p.Changes()

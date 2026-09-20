@@ -77,6 +77,7 @@ func (p *Project) authoredPaths() []string {
 	return paths
 }
 
+// RenameShip changes player-facing labels without moving maps or source files.
 func (p *Project) RenameShip(name string) (err error) {
 	before := p.Capture()
 	defer func() {
@@ -84,11 +85,39 @@ func (p *Project) RenameShip(name string) (err error) {
 			p.Restore(before)
 		}
 	}()
-	if err := ShipNameError(p.Catalog, p.Dme, name, p.Hull.Type); err != nil {
+	if err = ShipNameError(p.Catalog, p.Dme, name, p.Hull.Type); err != nil {
 		return err
 	}
 	name = strings.TrimSpace(name)
 	if p.Hull.Name == name {
+		return nil
+	}
+	if p.Settings == nil {
+		if err = p.prepareShipDetails(); err != nil {
+			return err
+		}
+	}
+	p.Hull.Name = name
+	_, err = p.Changes()
+	return err
+}
+
+// ShipFileName is the current stem used for this ship's dedicated files.
+func (p *Project) ShipFileName() string { return p.mapFileID() }
+
+// RenameShipFiles moves dedicated files and updates references, preserving labels and game IDs.
+func (p *Project) RenameShipFiles(name string) (err error) {
+	before := p.Capture()
+	defer func() {
+		if err != nil {
+			p.Restore(before)
+		}
+	}()
+	if err := ValidID(strings.TrimSpace(name)); err != nil {
+		return err
+	}
+	name = strings.TrimSpace(name)
+	if p.ShipFileName() == name {
 		return nil
 	}
 	var oldPaths, newPaths []string
@@ -99,7 +128,7 @@ func (p *Project) RenameShip(name string) (err error) {
 	} else {
 		oldPaths = p.authoredPaths()
 		oldID := p.Settings.FileID
-		p.Settings.FileID = fileName(name)
+		p.Settings.FileID = name
 		newPaths = p.authoredPaths()
 		p.Settings.FileID = oldID
 	}
@@ -129,7 +158,7 @@ func (p *Project) RenameShip(name string) (err error) {
 	}
 	h := cloneHull(p.Hull)
 	nextHull := cloneHull(h)
-	renamedSuffixes := map[string]string{h.Suffix: fileName(name)}
+	renamedSuffixes := map[string]string{h.Suffix: name}
 	moves := map[string]string{}
 	for i, t := range h.Themes {
 		from, err := p.Catalog.HullFile(h, t)
@@ -138,7 +167,7 @@ func (p *Project) RenameShip(name string) (err error) {
 		}
 		stem := renamedSuffixes[t.Suffix]
 		if stem == "" {
-			stem = fileName(name) + "_" + fileName(t.Name)
+			stem = name + "_" + fileName(t.Name)
 			renamedSuffixes[t.Suffix] = stem
 		}
 		nextHull.Themes[i].Suffix = stem
@@ -152,14 +181,14 @@ func (p *Project) RenameShip(name string) (err error) {
 	if err != nil {
 		return err
 	}
-	nextHull.Suffix = fileName(name)
+	nextHull.Suffix = name
 	newBase, err := p.Catalog.HullFile(nextHull, Theme{})
 	if err != nil {
 		return err
 	}
 	moves[oldBase] = newBase
 	for i, m := range h.Modules {
-		nextHull.Modules[i].File = renamedModuleFile(m.File, fileName(name))
+		nextHull.Modules[i].File = renamedModuleFile(m.File, name)
 		for _, theme := range append([]string{""}, m.Themes...) {
 			old, next := m.File, nextHull.Modules[i].File
 			if theme != "" {
@@ -200,9 +229,8 @@ func (p *Project) RenameShip(name string) (err error) {
 			p.expectGenerated(to, expected)
 		}
 	}
-	nextHull.Name = name
 	if p.Settings != nil {
-		p.Settings.FileID = fileName(name)
+		p.Settings.FileID = name
 	}
 	p.Hull = nextHull
 	if _, err := p.Changes(); err != nil {

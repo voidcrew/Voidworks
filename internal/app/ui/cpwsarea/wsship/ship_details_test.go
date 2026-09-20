@@ -3,6 +3,7 @@ package wsship
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/SpaiR/imgui-go"
@@ -68,6 +69,7 @@ func exerciseLoadedShipDetailsAndRename(t *testing.T, ws *WsShip, render func())
 	ws.setStage(stepBuild)
 	exerciseConfigurationRows(t, ws, render)
 	old := ws.project.Hull
+	originalFileName := ws.project.ShipFileName()
 	ws.beginTask(taskSettings)
 	ws.settings.description = "An existing ship with edited details"
 	ws.settings.hidden = true
@@ -76,6 +78,11 @@ func exerciseLoadedShipDetailsAndRename(t *testing.T, ws *WsShip, render func())
 	}
 	check := func(name, description string, hidden bool) {
 		t.Helper()
+		want := old
+		want.Name, want.Description, want.Hidden = name, description, hidden
+		if !reflect.DeepEqual(ws.project.Hull, want) || ws.project.ShipFileName() != originalFileName {
+			t.Fatal("display-name form changed map references or filenames")
+		}
 		cached, err := ship.OpenProject(ws.catalog, ws.project.Dme, ws.project.Hull)
 		if err != nil {
 			t.Fatal(err)
@@ -142,6 +149,7 @@ func exerciseLoadedShipDetailsAndRename(t *testing.T, ws *WsShip, render func())
 		t.Fatal("details undo:", ws.message)
 	}
 	check(old.Name, old.Description, old.Hidden)
+	exerciseSeparateFileRename(t, ws, render)
 	ws.setStage(stepBuild)
 	ws.showSources = true
 	io := imgui.CurrentIO()
@@ -158,4 +166,68 @@ func exerciseLoadedShipDetailsAndRename(t *testing.T, ws *WsShip, render func())
 		captureFrame(t, filepath.Join(dst, "ship-configuration.png"), 1400, 960)
 	}
 	ws.showSources = false
+}
+
+func exerciseSeparateFileRename(t *testing.T, ws *WsShip, render func()) {
+	t.Helper()
+	oldName, oldFiles := ws.project.Hull.Name, ws.project.ShipFileName()
+	oldMap, err := ws.catalog.HullFile(ws.project.Hull, ws.project.Hull.Themes[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws.setStage(stepBuild)
+	ws.beginRename(taskRenameShipFiles, "files", oldFiles)
+	ws.itemName = "separate_file_test"
+	for range 3 {
+		render()
+	}
+	if dst := os.Getenv("SHIP_RENDER_TEST_OUTPUT"); dst != "" {
+		captureFrame(t, filepath.Join(dst, "rename-files.png"), 1400, 960)
+	}
+	// Ctrl+S must stage the rename and show the review, not move files immediately.
+	if ws.Save() || ws.stage != stepReview || ws.project.Hull.Name != oldName {
+		t.Fatal("file rename skipped review or changed player-facing name:", ws.message)
+	}
+	if _, err := os.Stat(oldMap); err != nil {
+		t.Fatal("file was moved before review", err)
+	}
+	ws.prepareReview()
+	removed, created := false, false
+	for _, project := range ws.reviewed {
+		for _, file := range project.files {
+			removed = removed || file.deleted
+			created = created || !file.existed && !file.deleted
+		}
+	}
+	if !removed || !created {
+		t.Fatal("review does not expose both old and new paths")
+	}
+	for range 3 {
+		render()
+	}
+	if dst := os.Getenv("SHIP_RENDER_TEST_OUTPUT"); dst != "" {
+		captureFrame(t, filepath.Join(dst, "rename-files-review.png"), 1400, 960)
+	}
+	if !ws.Save() {
+		t.Fatal(ws.message)
+	}
+	if ws.project.Hull.Name != oldName || ws.project.ShipFileName() != "separate_file_test" {
+		t.Fatal("file rename did not preserve display name")
+	}
+	ws.app.CommandStorage().Undo()
+	if !ws.Save() || ws.project.ShipFileName() != oldFiles {
+		t.Fatal("file rename undo failed:", ws.message)
+	}
+	ws.app.CommandStorage().Redo()
+	if !ws.Save() || ws.project.Hull.Name != oldName {
+		t.Fatal("file rename redo failed:", ws.message)
+	}
+	ws.app.CommandStorage().Undo()
+	if !ws.Save() {
+		t.Fatal(ws.message)
+	}
+	if _, err := os.Stat(oldMap); err != nil {
+		t.Fatal("file undo did not restore old map", err)
+	}
+	ws.setStage(stepBuild)
 }

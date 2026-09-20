@@ -16,6 +16,8 @@ func exerciseShipDetails(t *testing.T, ws *WsShip, render func()) {
 	t.Helper()
 	ws.setStage(stepBuild)
 	oldName := ws.project.Hull.Name
+	oldFiles := ws.project.ShipFileName()
+	oldSuffix := ws.project.Hull.Suffix
 	ws.beginTask(taskSettings)
 	ws.settings.name = "Renamed Workshop Ship"
 	ws.settings.costs = ship.PartCosts{"combat": 2, "science": 3, "trade": 4, "misc": 5}
@@ -27,6 +29,9 @@ func exerciseShipDetails(t *testing.T, ws *WsShip, render func()) {
 	}
 	if !ws.IsModified() || !ws.Save() {
 		t.Fatalf("details draft did not save: %s", ws.message)
+	}
+	if ws.project.ShipFileName() != oldFiles || ws.project.Hull.Suffix != oldSuffix {
+		t.Fatal("ship details name edit moved files")
 	}
 	fresh, err := dmenv.New(ws.project.Dme.RootFile)
 	if err != nil {
@@ -65,6 +70,7 @@ func exerciseShipDetails(t *testing.T, ws *WsShip, render func()) {
 		t.Fatal(err)
 	}
 	ws.finishTask()
+	exerciseSeparateFileRename(t, ws, render)
 }
 
 // Exercise form validation, editing labels, persistence and the actual undo stack

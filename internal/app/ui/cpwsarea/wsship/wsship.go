@@ -467,6 +467,13 @@ func (ws *WsShip) FocusSource(file string) {
 	}
 }
 func (ws *WsShip) Save() bool {
+	if ws.task == taskRenameShipFiles && ws.renamePending() {
+		ws.applyRename()
+		if ws.stage == stepReview {
+			ws.message = "Review the file changes, then choose Save all changes."
+		}
+		return false
+	}
 	if !ws.commitDraft() {
 		return false
 	}

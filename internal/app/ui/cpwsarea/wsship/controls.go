@@ -29,6 +29,7 @@ type reviewProject struct {
 type reviewFile struct {
 	path    string
 	existed bool
+	deleted bool
 }
 
 func (ws *WsShip) prepareReview() {
@@ -45,7 +46,7 @@ func (ws *WsShip) prepareReview() {
 		}
 		for _, c := range changes {
 			rel, _ := filepath.Rel(ws.catalog.Root, c.Path)
-			item.files = append(item.files, reviewFile{filepath.ToSlash(rel), c.Existed})
+			item.files = append(item.files, reviewFile{filepath.ToSlash(rel), c.Existed, c.Delete})
 		}
 		if len(item.files) > 0 || err != nil {
 			ws.reviewed = append(ws.reviewed, item)
@@ -394,6 +395,9 @@ func (ws *WsShip) configurationActions() {
 		ws.showSources = !ws.showSources
 	}
 	if ws.showSources {
+		if workshop.Row("rename-ship-files", "Rename ship files...", "Maps and dedicated source files", ">", false, style.Teal, 0) {
+			ws.beginRename(taskRenameShipFiles, "files", ws.project.ShipFileName())
+		}
 		if imgui.Checkbox("Show only the part being edited", &ws.isolated) {
 			ws.flush()
 			ws.rebuild()
@@ -589,10 +593,18 @@ func (ws *WsShip) review() {
 			continue
 		}
 		imgui.Text(fmt.Sprintf("%s - %d files", item.name, len(item.files)))
+		for _, file := range item.files {
+			if file.deleted {
+				imgui.SetNextItemOpen(true, imgui.ConditionAppearing)
+				break
+			}
+		}
 		if imgui.TreeNode("Show files##" + item.id) {
 			for _, c := range item.files {
 				prefix := "Update "
-				if !c.existed {
+				if c.deleted {
+					prefix = "Remove "
+				} else if !c.existed {
 					prefix = "Create "
 				}
 				hint(prefix + c.path)
