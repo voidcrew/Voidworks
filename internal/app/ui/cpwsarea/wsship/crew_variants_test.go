@@ -209,6 +209,24 @@ func exerciseVariantCrew(t *testing.T, ws *WsShip, render func()) {
 	if jobs, err := reopened.CrewJobs("ship"); err != nil || !reflect.DeepEqual(jobs, baseJobs) {
 		t.Fatal("variant edits changed the shared ship crew", err)
 	}
+	// Successful deletion still commits to the selected room only and supports history.
+	ws.loadCrewScope("module/variant_engineering")
+	deletedScope := ws.crew.scope
+	deletedJobs := ship.CloneCrewJobs(ws.crew.jobs)
+	if !ws.deleteCrewJob() || len(ws.crew.jobs) != 0 || ws.crew.dirty {
+		t.Fatal("could not delete the last room job", ws.crew.error)
+	}
+	render()
+	ws.app.CommandStorage().Undo()
+	if ws.crew.scope != deletedScope || !reflect.DeepEqual(ws.crew.jobs, deletedJobs) {
+		t.Fatal("undo lost the deleted room job")
+	}
+	ws.app.CommandStorage().Redo()
+	if ws.crew.scope != deletedScope || len(ws.crew.jobs) != 0 {
+		t.Fatal("redo did not delete the room job")
+	}
+	ws.app.CommandStorage().Undo()
+	render()
 	exerciseCrewClipboard(t, ws, render)
 }
 

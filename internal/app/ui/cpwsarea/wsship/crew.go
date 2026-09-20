@@ -288,6 +288,10 @@ func (ws *WsShip) crewContent() {
 			title("Select a job")
 			hint("Choose a job from the roster to edit it.")
 		}
+		if c.dirty {
+			space()
+			ws.crewJobActions()
+		}
 		return
 	}
 	if p, ok := ws.app.SelectedPrefab(); ok && p.Path() != c.lastPrefab {
@@ -613,13 +617,15 @@ func (ws *WsShip) crewJobActions() {
 	if deleting {
 		imgui.OpenPopup("Delete crew job")
 	}
-	if imgui.BeginPopupModal("Delete crew job") {
-		imgui.TextWrapped("Remove " + j.Name + " from this roster? You can undo this change.")
+	viewport := imgui.MainViewport()
+	width := min(460*window.PointSize(), max(1, viewport.WorkSize().X-32))
+	imgui.SetNextWindowPosV(viewport.WorkCenter(), imgui.ConditionAppearing, imgui.Vec2{X: .5, Y: .5})
+	imgui.SetNextWindowSize(imgui.Vec2{X: width})
+	imgui.SetNextWindowSizeConstraints(imgui.Vec2{X: width}, imgui.Vec2{X: width, Y: max(1, viewport.WorkSize().Y-32)})
+	if imgui.BeginPopupModalV("Delete crew job", nil, imgui.WindowFlagsNoMove|imgui.WindowFlagsAlwaysAutoResize) {
+		workshop.Wrapped("Remove " + j.Name + " from this roster? You can undo this change.")
 		if imgui.Button("Remove job") {
-			c.jobs = append(c.jobs[:c.selected], c.jobs[c.selected+1:]...)
-			c.selected = min(c.selected, len(c.jobs)-1)
-			c.dirty = true
-			ws.commitCrew()
+			ws.deleteCrewJob()
 			imgui.CloseCurrentPopup()
 		}
 		imgui.SameLine()
@@ -629,6 +635,26 @@ func (ws *WsShip) crewJobActions() {
 		imgui.EndPopup()
 	}
 }
+
+// A rejected deletion must leave the form usable, including when it would
+// remove the final job and hide the selected-job controls.
+func (ws *WsShip) deleteCrewJob() bool {
+	c := &ws.crew
+	if c.selected < 0 || c.selected >= len(c.jobs) {
+		return false
+	}
+	jobs, selected, dirty := c.jobs, c.selected, c.dirty
+	c.jobs = ship.CloneCrewJobs(jobs)
+	c.jobs = append(c.jobs[:selected], c.jobs[selected+1:]...)
+	c.selected = min(selected, len(c.jobs)-1)
+	c.dirty = true
+	if !ws.commitCrew() {
+		c.jobs, c.selected, c.dirty = jobs, selected, dirty
+		return false
+	}
+	return true
+}
+
 func (ws *WsShip) crewItemFits(path string) bool {
 	c := &ws.crew
 	o := ws.project.Dme.Objects[path]
