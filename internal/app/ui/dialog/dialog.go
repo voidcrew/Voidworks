@@ -21,6 +21,9 @@ func Process() {
 		if !imgui.IsPopupOpen(dialog.Name()) {
 			imgui.OpenPopup(dialog.Name())
 		}
+		if sized, ok := dialog.(interface{ BeforePopup() }); ok {
+			sized.BeforePopup()
+		}
 
 		var isOpen bool
 		if dialog.HasCloseButton() {

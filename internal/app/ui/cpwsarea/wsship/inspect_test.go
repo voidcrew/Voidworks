@@ -11,6 +11,8 @@ import (
 
 	"sdmm/internal/app/ui/cpwsarea/wsmap/pmap/tilemenu"
 	"sdmm/internal/dmapi/dmmap"
+	"sdmm/internal/dmapi/dmmap/dmmdata/dmmprefab"
+	"sdmm/internal/dmapi/dmvars"
 	"sdmm/internal/ship"
 	"sdmm/internal/util"
 )
@@ -113,6 +115,27 @@ func exerciseShipContextContents(t *testing.T, ws *WsShip, render func()) {
 			before[file] = ship.RawData(doc.Map).EncodeTGM()
 		}
 		file := ws.pane.Dmm().Path.Absolute
+		original := selected.Prefab()
+		replacement := dmmprefab.New(0, original.Path(), dmvars.Set(original.Vars(), "icon_state", `"sprite-replacement-test"`))
+		if err := ws.pane.Editor().ReplaceSprite(selected.Id(), original, replacement); err != nil {
+			t.Fatal(err)
+		}
+		ws.pane.Editor().CommitContextNow("Replace sprite")
+		for name, doc := range ws.project.Documents {
+			if name != file && !bytes.Equal(before[name], ship.RawData(doc.Map).EncodeTGM()) {
+				t.Fatal("sprite replacement changed another source")
+			}
+		}
+		ws.app.CommandStorage().Undo()
+		if !bytes.Equal(before[file], ship.RawData(ws.project.Documents[file].Map).EncodeTGM()) {
+			t.Fatal("sprite replacement undo failed")
+		}
+		ws.app.CommandStorage().Redo()
+		if live := ws.pane.Editor().SpriteTarget(selected.Id()); live == nil || live.Prefab().Vars().TextV("icon_state", "") != "sprite-replacement-test" {
+			t.Fatal("sprite replacement redo failed")
+		}
+		ws.app.CommandStorage().Undo()
+		selected = ws.pane.Editor().SpriteTarget(selected.Id())
 		ws.pane.Editor().InstanceDelete(selected)
 		ws.pane.Editor().CommitContextNow("Delete context test object")
 		if ws.project.Documents[file].Map.IsInstanceExist(selected.Id()) {

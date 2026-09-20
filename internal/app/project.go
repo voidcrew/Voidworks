@@ -45,6 +45,10 @@ func (a *app) loadResourceV(path string, ws *workspace.Workspace) {
 		a.loadEnvironment(path)
 		return
 	}
+	if strings.EqualFold(filepath.Ext(path), ".dmi") || strings.EqualFold(filepath.Ext(path), ".png") {
+		a.openDMI(path, "", 2)
+		return
+	}
 
 	if !strings.EqualFold(filepath.Ext(path), ".dmm") {
 		log.Print("invalid resource to load:", path)

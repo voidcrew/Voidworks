@@ -20,7 +20,7 @@ type Unit struct {
 }
 
 func (u Unit) Sprite() *dmicon.Sprite {
-	return u.sprite
+	return u.sprite.Current()
 }
 
 func (u Unit) Instance() *dmminstance.Instance {

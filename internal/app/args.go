@@ -9,6 +9,7 @@ import (
 type startupArgs struct {
 	project         string
 	maps            []string
+	sprites         []string
 	shipWorkspace   bool
 	ruinWorkspace   bool
 	planetWorkspace bool
@@ -35,6 +36,8 @@ func parseStartupArgs(args []string) startupArgs {
 			parsed.project = path
 		case ".dmm":
 			parsed.maps = append(parsed.maps, path)
+		case ".dmi", ".png":
+			parsed.sprites = append(parsed.sprites, path)
 		}
 	}
 	return parsed
@@ -59,10 +62,16 @@ func (a *app) checkProgramArgs() {
 			for _, path := range args.maps {
 				a.loadMap(path, nil)
 			}
+			for _, path := range args.sprites {
+				a.openDMI(path, "", 2)
+			}
 		})
 		return
 	}
 	for _, path := range args.maps {
 		a.loadResource(path)
+	}
+	for _, path := range args.sprites {
+		a.openDMI(path, "", 2)
 	}
 }

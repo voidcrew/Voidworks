@@ -134,6 +134,14 @@ func New(app app) *Menu {
 func (m *Menu) Process() {
 	w.MainMenuBar(w.Layout{
 		w.Menu("File", w.Layout{
+			w.Custom(func() {
+				if app, ok := m.app.(interface{ DoNewDMI() }); ok {
+					w.MenuItem("New DMI", app.DoNewDMI).IconEmpty().Build()
+				}
+				if app, ok := m.app.(interface{ DoRecoverDMI() }); ok {
+					w.MenuItem("Recover DMI drafts...", app.DoRecoverDMI).IconEmpty().Build()
+				}
+			}),
 			w.MenuItem("New Workspace", m.app.DoNewWorkspace).
 				Icon(icon.File).
 				Shortcut(platform.KeyModName(), "N"),

@@ -19,6 +19,8 @@ import (
 	"sdmm/internal/app/window"
 	"sdmm/internal/dmapi/dmenv"
 	"sdmm/internal/dmapi/dmicon"
+	"sdmm/internal/dmapi/dmmap"
+	"sdmm/internal/dmapi/dmmap/dmmdata/dmmprefab"
 	"sdmm/internal/dmapi/dmmap/dmminstance"
 	"sdmm/internal/imguiext/style"
 	"sdmm/internal/mappreview"
@@ -53,11 +55,13 @@ type Workspace struct {
 	picking, creating, blank, fit, cave, population, narrowEditor, review bool
 	last                                                                  planet.State
 	renderKey                                                             string
+	iconRevision                                                          uint64
 	lastBuild                                                             time.Time
 	items                                                                 []string
 	deleting                                                              bool
 	deleteReplacement                                                     string
 	hovered                                                               *dmminstance.Instance
+	spriteTargets                                                         []*dmmprefab.Prefab
 	mouseWorld                                                            imgui.Vec2
 	hoverActive                                                           bool
 	selectedEntry                                                         string
@@ -168,6 +172,7 @@ func (w *Workspace) bind(p *planet.Project) {
 	w.deleting = false
 	w.renderKey = ""
 	w.preview, w.scene = nil, nil
+	w.spriteTargets = nil
 	w.fit = true
 	w.mode = 0
 	w.cave = false
@@ -246,6 +251,19 @@ func (w *Workspace) rebuild() {
 	if w.project == nil {
 		return
 	}
+	if w.iconRevision != dmicon.LayoutRevision && w.preview != nil {
+		w.iconRevision = dmicon.LayoutRevision
+		w.scene = mappreview.Build(w.preview.Map, w.dme, mappreview.Options{Smoothing: true, Lighting: w.lighting}, func(icon, state string) bool {
+			d, e := dmicon.Cache.Get(icon)
+			if e != nil {
+				return false
+			}
+			_, ok := d.States[state]
+			return ok
+		})
+		w.canvas.Render().ReplaceBucket(w.scene.Map, 1)
+		w.canvas.Render().SetPreviewLighting(w.scene.Lighting)
+	}
 	o := planet.PreviewOptions{Caves: w.cave, Populate: w.population}
 	if w.mode == 1 {
 		o.Biome = w.selected
@@ -283,6 +301,13 @@ func (w *Workspace) rebuild() {
 	w.canvas.Render().ReplaceBucket(w.scene.Map, 1)
 	w.canvas.Render().SetPreviewLighting(w.scene.Lighting)
 	w.canvas.Render().SetUnitProcessor(w)
+}
+
+func (w *Workspace) SpriteContext() (*dmmap.Dmm, *dmenv.Dme) {
+	if w.preview == nil {
+		return nil, w.dme
+	}
+	return w.preview.Map, w.dme
 }
 
 func (w *Workspace) commitName() bool {
@@ -417,7 +442,7 @@ func (w *Workspace) visual() {
 	if imgui.Button("Fit") {
 		w.fit = true
 	}
-	workshop.Muted("Click terrain, plants, features or creatures to inspect their choices. Scroll to zoom; middle-drag to pan.")
+	workshop.Muted("Click terrain, plants, features or creatures to inspect their choices. Right-click to edit sprites. Scroll to zoom; middle-drag to pan.")
 	if w.preview == nil {
 		imgui.TextWrapped(w.message)
 		return
@@ -480,6 +505,9 @@ func (w *Workspace) previewCanvas(extent imgui.Vec2) {
 				imgui.TextDisabled(fmt.Sprintf("Heat %.0f%% / Moisture %.0f%%", target.cell.Heat*100, target.cell.Moisture*100))
 				imgui.EndTooltip()
 			}
+		}
+		if w.mode != 2 {
+			w.previewSpriteMenu()
 		}
 	}
 	imgui.EndChild()

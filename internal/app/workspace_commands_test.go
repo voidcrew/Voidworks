@@ -16,6 +16,7 @@ import (
 	"sdmm/internal/app/config"
 	"sdmm/internal/app/prefs"
 	"sdmm/internal/app/ui/cpwsarea/wsmap/tools"
+	"sdmm/internal/app/ui/dialog"
 	"sdmm/internal/app/ui/layout"
 	"sdmm/internal/app/ui/menu"
 	"sdmm/internal/app/ui/shortcut"
@@ -144,6 +145,7 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 		shortcut.Process()
 		a.menu.Process()
 		a.layout.Process()
+		dialog.Process()
 		if textInput {
 			imgui.Begin("Text clipboard test")
 			if focusText {
@@ -190,6 +192,9 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 		frame()
 		frame()
 	}
+	// The sprite beta adds New DMI and Recover DMI drafts above the normal
+	// File entries. Click Save below those two additional menu rows.
+	fileSave := imgui.Vec2{X: 75, Y: 230}
 	click(imgui.Vec2{X: 700, Y: 360})
 	io.AddInputCharacters("Command Fixture")
 	frame()
@@ -251,7 +256,7 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 	if !a.HasSaveableWorkspace() || a.layout.WsArea.ActiveWorkspace().Content() != ws {
 		t.Fatal("File menu lost ship command routing")
 	}
-	click(imgui.Vec2{X: 75, Y: 190})
+	click(fileSave)
 	capture("after-file-save")
 	if a.previewRequests != 3 {
 		t.Fatal("File > Save did not reach the ship")
@@ -286,7 +291,7 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 		t.Fatal("Ctrl+S after tab switch did not save ship")
 	}
 	click(imgui.Vec2{X: 20, Y: 10})
-	click(imgui.Vec2{X: 75, Y: 190})
+	click(fileSave)
 	if a.previewRequests != 5 {
 		t.Fatal("File > Save after tab switch did not save ship")
 	}
@@ -436,4 +441,10 @@ func TestNativeWorkspaceCommands(t *testing.T) {
 	if job, ok := ws.CopyCrewJob(); !ok || job.Name != "Clipboard engineer (copy 3)" {
 		t.Fatal("Edit > Paste did not use the job clipboard", job)
 	}
+	click(imgui.Vec2{X: 390, Y: 322}) // Back to ship before editing map sprites.
+	if ws.EditingCrew() || a.CurrentEditor() == nil || a.CanPaste() {
+		t.Fatal("returning from Crew did not restore the map clipboard target")
+	}
+	exerciseSpritePickerCommands(t, a, frame, capture, click)
+	exerciseSpriteContextSwitch(t, a, &ordinary, frame)
 }

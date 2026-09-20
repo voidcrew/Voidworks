@@ -53,7 +53,7 @@ func (a *app) DoOpenV(ws *workspace.Workspace) {
 	if file, err := dialog.
 		File().
 		Title("Open").
-		Filter("Resource", "dme", "dmm").
+		Filter("Resource", "dme", "dmm", "dmi", "png").
 		SetStartDir(startDir).
 		Load(); err == nil {
 		log.Print("resource to load selected:", file)
@@ -223,12 +223,20 @@ func (a *app) DoExit() {
 // DoUndo does undo of the latest command.
 func (a *app) DoUndo() {
 	log.Print("undo")
+	if sprite := a.activeSprite(); sprite != nil {
+		sprite.Undo()
+		return
+	}
 	a.commandStorage.Undo()
 }
 
 // DoRedo does redo of the previous command.
 func (a *app) DoRedo() {
 	log.Print("redo")
+	if sprite := a.activeSprite(); sprite != nil {
+		sprite.Redo()
+		return
+	}
 	a.commandStorage.Redo()
 }
 
@@ -274,8 +282,12 @@ func (a *app) DoOpenSupport() {
 	}
 }
 
-// DoCopy copies the selected job or map tiles in the active workspace.
+// DoCopy copies the selected sprite pixels, crew job or map tiles.
 func (a *app) DoCopy() {
+	if s := a.activeSprite(); s != nil {
+		s.Copy()
+		return
+	}
 	log.Print("do copy")
 	if ws := a.activeCrewWorkspace(); ws != nil {
 		if job, ok := ws.CopyCrewJob(); ok {
@@ -288,8 +300,12 @@ func (a *app) DoCopy() {
 	}
 }
 
-// DoPaste pastes into the active crew roster or map.
+// DoPaste pastes into the active sprite, crew roster or map.
 func (a *app) DoPaste() {
+	if s := a.activeSprite(); s != nil {
+		s.Paste()
+		return
+	}
 	log.Print("do paste")
 	if ws := a.activeCrewWorkspace(); ws != nil {
 		if a.crewClipboard != nil {
@@ -305,6 +321,10 @@ func (a *app) DoPaste() {
 
 // DoCut cuts currently selected (hovered) tiles to the global clipboard.
 func (a *app) DoCut() {
+	if s := a.activeSprite(); s != nil {
+		s.Cut()
+		return
+	}
 	log.Print("do cut")
 	if ws, ok := a.activeWsMap(); ok {
 		ws.Map().Editor().TileCutSelected()
@@ -314,6 +334,10 @@ func (a *app) DoCut() {
 
 // DoDelete deletes tiles from the currently selected (hovered) tiles.
 func (a *app) DoDelete() {
+	if s := a.activeSprite(); s != nil {
+		s.Delete()
+		return
+	}
 	log.Print("do delete")
 	if ws, ok := a.activeWsMap(); ok {
 		ws.Map().Editor().TileDeleteSelected()
@@ -323,6 +347,10 @@ func (a *app) DoDelete() {
 
 // DoDeselect deselects currently selected area.
 func (a *app) DoDeselect() {
+	if s := a.activeSprite(); s != nil {
+		s.Deselect()
+		return
+	}
 	log.Print("do deselect")
 	if ws, ok := a.activeWsMap(); ok {
 		ws.Map().DoDeselect()

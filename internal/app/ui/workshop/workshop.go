@@ -66,7 +66,7 @@ func Tooltip(text string) {
 	if imgui.IsItemHovered() {
 		imgui.BeginTooltip()
 		imgui.PushTextWrapPosV(360 * window.PointSize())
-		imgui.TextWrapped(text)
+		imgui.Text(text)
 		imgui.PopTextWrapPos()
 		imgui.EndTooltip()
 	}

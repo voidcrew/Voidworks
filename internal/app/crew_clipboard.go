@@ -18,6 +18,9 @@ func (a *app) activeCrewWorkspace() crewWorkspace {
 }
 
 func (a *app) CanPaste() bool {
+	if a.activeSprite() != nil {
+		return true
+	}
 	if a.activeCrewWorkspace() != nil {
 		return a.crewClipboard != nil
 	}

@@ -106,6 +106,7 @@ func (w *Workspace) environmentSettings() {
 		w.picking, w.pickingEnvironment, w.pickingRiver = true, true, false
 		w.pickerScope, w.replace, w.filter = 0, 0, ""
 	}
+	w.spriteRowMenu(e.Baseturf)
 	w.sprite(e.Baseturf, imgui.Vec2{X: pos.X + 9*window.PointSize(), Y: pos.Y + 12*window.PointSize()}, 32*window.PointSize())
 }
 

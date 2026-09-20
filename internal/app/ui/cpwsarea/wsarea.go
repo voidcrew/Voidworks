@@ -15,6 +15,7 @@ import (
 	"sdmm/internal/app/ui/cpwsarea/wspreview"
 	"sdmm/internal/app/ui/cpwsarea/wsruin"
 	"sdmm/internal/app/ui/cpwsarea/wsship"
+	"sdmm/internal/app/ui/cpwsarea/wssprite"
 	"sdmm/internal/app/ui/dialog"
 	"sdmm/internal/planet"
 	"sdmm/internal/rsc"
@@ -64,6 +65,10 @@ func (w *WsArea) Init(app App) {
 
 func (w *WsArea) Free() {
 	for _, ws := range append([]*workspace.Workspace(nil), w.workspaces...) {
+		if _, ok := ws.Content().(*wssprite.Workspace); ok {
+			w.closeWorkspace(ws)
+			continue
+		}
 		if _, ok := ws.Content().(*wsplanet.Workspace); ok {
 			w.closeWorkspace(ws)
 			continue
@@ -312,7 +317,7 @@ func (w *WsArea) makeCloseWorkspacesDialog(wsToClose, unsavedWorkspaces []*works
 	}
 	dType.ActionNo = func() {
 		for _, ws := range unsavedWorkspaces {
-			w.app.CommandStorage().Balance(ws.CommandStackId())
+			w.discardWorkspaceChanges(ws)
 		}
 		w.closeWorkspaces(wsToClose)
 		if callback != nil {
@@ -364,7 +369,7 @@ func (w *WsArea) makeCloseWorkspaceDialog(ws *workspace.Workspace, callback func
 		}
 	}
 	dType.ActionNo = func() {
-		w.app.CommandStorage().Balance(ws.CommandStackId())
+		w.discardWorkspaceChanges(ws)
 		w.closeWorkspace(ws)
 		if callback != nil {
 			callback(true)
@@ -377,6 +382,14 @@ func (w *WsArea) makeCloseWorkspaceDialog(ws *workspace.Workspace, callback func
 	}
 
 	return dType
+}
+
+func (w *WsArea) discardWorkspaceChanges(ws *workspace.Workspace) {
+	if document, ok := ws.Content().(interface{ DiscardChanges() }); ok {
+		document.DiscardChanges()
+		return
+	}
+	w.app.CommandStorage().Balance(ws.CommandStackId())
 }
 
 func makeSaveSingleWorkspaceDialogType(ws *workspace.Workspace) dialog.TypeConfirmation {
@@ -450,6 +463,10 @@ func (w *WsArea) findMapWorkspace(path dmmap.DmmPath) (*workspace.Workspace, boo
 func (w *WsArea) findMapWorkspaces() []*workspace.Workspace {
 	var workspaces []*workspace.Workspace
 	for _, ws := range w.workspaces {
+		if _, ok := ws.Content().(*wssprite.Workspace); ok {
+			workspaces = append(workspaces, ws)
+			continue
+		}
 		if _, ok := ws.Content().(*wsplanet.Workspace); ok {
 			workspaces = append(workspaces, ws)
 			continue
@@ -535,6 +552,9 @@ func (w *WsArea) switchActiveWorkspace(activeWs *workspace.Workspace) {
 }
 
 func (w *WsArea) isWorkspaceUnsaved(ws *workspace.Workspace) bool {
+	if content, ok := ws.Content().(interface{ IsModified() bool }); ok {
+		return content.IsModified()
+	}
 	if planet, ok := ws.Content().(*wsplanet.Workspace); ok {
 		return planet.IsModified()
 	}

@@ -3,6 +3,7 @@ package dmicon
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	"sdmm/internal/dmapi/dm"
 
@@ -18,7 +19,9 @@ type IconsCache struct {
 
 func (i *IconsCache) Free() {
 	for _, dmi := range i.icons {
-		dmi.free()
+		if dmi != nil {
+			dmi.free()
+		}
 	}
 	log.Printf("cache free; [%d] icons disposed", len(i.icons))
 	i.rootDirPath = ""
@@ -30,9 +33,38 @@ func (i *IconsCache) SetRootDirPath(rootDirPath string) {
 	log.Print("cache root dir:", rootDirPath)
 }
 
+// Invalidate reloads disk data without discarding an open sprite editor's live
+// preview. Both absolute and project-relative cache aliases refer to one file.
+func (i *IconsCache) Invalidate(path string) {
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(i.rootDirPath, path)
+	}
+	key := iconKey(path)
+	for name, icon := range i.icons {
+		full := name
+		if !filepath.IsAbs(full) {
+			full = filepath.Join(i.rootDirPath, full)
+		}
+		if iconKey(full) == key {
+			if icon != nil {
+				icon.free()
+			}
+			delete(i.icons, name)
+		}
+	}
+	LayoutRevision++
+}
+
 func (i *IconsCache) Get(icon string) (*Dmi, error) {
 	if len(icon) == 0 {
 		return nil, errors.New("dmi icon is empty")
+	}
+	path := icon
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(i.rootDirPath, path)
+	}
+	if live := liveIcons[iconKey(path)]; live != nil {
+		return live.rendered, nil
 	}
 
 	if dmi, ok := i.icons[icon]; ok {
@@ -42,7 +74,7 @@ func (i *IconsCache) Get(icon string) (*Dmi, error) {
 		return dmi, nil
 	}
 
-	dmi, err := New(i.rootDirPath + "/" + icon)
+	dmi, err := New(path)
 	i.icons[icon] = dmi
 	return dmi, err
 }

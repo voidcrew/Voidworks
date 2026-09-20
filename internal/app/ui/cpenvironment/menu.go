@@ -8,6 +8,7 @@ import (
 	"sdmm/internal/app/prefs"
 	"sdmm/internal/app/ui/layout/lnode"
 	"sdmm/internal/dmapi/dmmap"
+	"sdmm/internal/dmapi/dmmap/dmmdata/dmmprefab"
 	"sdmm/internal/imguiext/icon"
 	w "sdmm/internal/imguiext/widget"
 	"sdmm/internal/platform"
@@ -20,6 +21,14 @@ import (
 func (e *Environment) showNodeMenu(n *treeNode) {
 	if imgui.BeginPopupContextItemV(fmt.Sprint("environment_node_menu_", n.orig.Path), imgui.PopupFlagsMouseButtonRight) {
 		w.Layout{
+			w.Custom(func() {
+				if app, ok := e.app.(interface{ DoEditSprite(*dmmprefab.Prefab) }); ok {
+					w.MenuItem("Edit sprite", func() { app.DoEditSprite(dmmap.PrefabStorage.Initial(n.orig.Path)) }).IconEmpty().Build()
+				}
+				if app, ok := e.app.(interface{ DoReplacePrefabSprite(*dmmprefab.Prefab) }); ok {
+					w.MenuItem("Replace sprite", func() { app.DoReplacePrefabSprite(dmmap.PrefabStorage.Initial(n.orig.Path)) }).IconEmpty().Build()
+				}
+			}),
 			w.MenuItem("Find on Map", e.doFindOnMap(n)).
 				Icon(icon.Search).
 				Enabled(e.app.HasActiveMap()),

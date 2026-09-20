@@ -6,11 +6,10 @@ import (
 	"image/draw"
 	_ "image/png"
 	"os"
-	"sdmm/third_party/sdmmparser"
+	"sdmm/internal/dmi"
 
 	"sdmm/internal/app/window"
 	"sdmm/internal/dmapi/dm"
-	"sdmm/internal/platform"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/rs/zerolog/log"
@@ -45,53 +44,13 @@ func (d *Dmi) State(state string) (*State, error) {
 
 func New(path string) (*Dmi, error) {
 	log.Printf("creating new: [%s]...", path)
-
-	iconMetadata, err := sdmmparser.ParseIconMetadata(path)
+	model, err := dmi.Open(path)
 	if err != nil {
 		log.Printf("unable to parse icon metadata [%s]: %s", path, err)
 		return nil, err
 	}
 
-	rgba, err := loadRgbaImage(path)
-	if err != nil {
-		log.Printf("unable to load rgba image [%s]: %s", path, err)
-		return nil, err
-	}
-
-	width := rgba.Bounds().Dx()
-	height := rgba.Bounds().Dy()
-
-	dmi := &Dmi{
-		IconWidth:     iconMetadata.Width,
-		IconHeight:    iconMetadata.Height,
-		TextureWidth:  width,
-		TextureHeight: height,
-		Cols:          width / iconMetadata.Width,
-		Rows:          height / iconMetadata.Height,
-		Image:         rgba,
-		Texture:       platform.CreateTexture(rgba),
-		States:        make(map[string]*State),
-	}
-
-	spriteIdx := 0
-
-	for _, state := range iconMetadata.States {
-		dmiState := &State{
-			Dirs:   state.Dirs,
-			Frames: state.Frames,
-		}
-
-		for i := 0; i < state.Dirs*state.Frames; i++ {
-			dmiState.Sprites = append(dmiState.Sprites, newDmiSprite(dmi, spriteIdx))
-			spriteIdx += 1
-		}
-
-		dmi.States[state.Name] = dmiState
-	}
-
-	log.Printf("created: [%s]", path)
-
-	return dmi, nil
+	return FromIcon(model)
 }
 
 func loadRgbaImage(path string) (*image.NRGBA, error) {
@@ -120,6 +79,8 @@ func loadRgbaImage(path string) (*image.NRGBA, error) {
 type State struct {
 	Dirs, Frames int
 	Sprites      []*Sprite
+	previewFrame int
+	modelIndex   int
 }
 
 func (s State) Sprite() *Sprite {
@@ -159,7 +120,7 @@ func (s State) dir2idx(dir int) int {
 		idx = 7
 	}
 
-	if idx+1 <= len(s.Sprites) {
+	if idx < s.Dirs {
 		return idx
 	}
 	return 0
@@ -167,8 +128,17 @@ func (s State) dir2idx(dir int) int {
 
 type Sprite struct {
 	dmi            *Dmi
+	animation      *State
+	direction      int
 	X1, Y1, X2, Y2 int
 	U1, V1, U2, V2 float32
+}
+
+func (s *Sprite) Current() *Sprite {
+	if s.animation != nil && s.animation.previewFrame > 0 {
+		return s.animation.Sprites[s.animation.previewFrame*s.animation.Dirs+s.direction]
+	}
+	return s
 }
 
 func (s *Sprite) Dmi() *Dmi {

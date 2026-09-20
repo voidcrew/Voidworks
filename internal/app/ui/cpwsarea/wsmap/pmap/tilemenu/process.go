@@ -100,7 +100,24 @@ func (t *TileMenu) showInstanceControls(entry Entry, idx int) w.Layout {
 	i := entry.Instance
 	p := i.Prefab()
 
-	controls := w.Layout{}
+	controls := w.Layout{
+		w.Custom(func() {
+			if app, ok := t.app.(interface{ DoEditSprite(*dmmprefab.Prefab) }); ok {
+				w.MenuItem("Edit sprite", func() { app.DoEditSprite(p) }).IconEmpty().Build()
+			}
+			if app, ok := t.app.(interface {
+				DoReplaceSprite(*dmminstance.Instance, func())
+			}); ok {
+				w.MenuItem("Replace sprite", func() {
+					var source func()
+					if !entry.Editable {
+						source = entry.EditSource
+					}
+					app.DoReplaceSprite(i, source)
+				}).IconEmpty().Enabled(entry.Editable || entry.EditSource != nil).Build()
+			}
+		}),
+	}
 	if !entry.Editable {
 		if entry.EditSource != nil {
 			controls = append(controls, w.MenuItem("Edit in "+entry.Source, entry.EditSource).Icon(icon.EyeDropper))

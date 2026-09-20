@@ -3,6 +3,7 @@ package render
 import (
 	"sdmm/internal/app/render/brush"
 	"sdmm/internal/app/render/bucket"
+	"sdmm/internal/dmapi/dmicon"
 	"sdmm/internal/dmapi/dmmap"
 	"sdmm/internal/mappreview"
 	"sdmm/internal/util"
@@ -18,14 +19,18 @@ type Render struct {
 	overlay         overlay
 	unitProcessor   unitProcessor
 	previewLighting *mappreview.Lighting
+	iconRevision    uint64
+	sources         map[int]*dmmap.Dmm
 	pixelPreview    pixelOffsetPreview
 }
 
 func New() *Render {
 	brush.TryInit()
 	return &Render{
-		Camera: newCamera(),
-		bucket: bucket.New(),
+		Camera:       newCamera(),
+		bucket:       bucket.New(),
+		sources:      make(map[int]*dmmap.Dmm),
+		iconRevision: dmicon.LayoutRevision,
 	}
 }
 
@@ -46,6 +51,10 @@ func (r *Render) SetActiveLevel(dmm *dmmap.Dmm, activeLevel int) {
 
 // UpdateBucketV will update the bucket data by the provided level.
 func (r *Render) UpdateBucketV(dmm *dmmap.Dmm, level int, tilesToUpdate []util.Point) {
+	if r.sources == nil {
+		r.sources = make(map[int]*dmmap.Dmm)
+	}
+	r.sources[level] = dmm
 	r.bucket.UpdateLevel(dmm, level, tilesToUpdate)
 }
 
@@ -57,10 +66,19 @@ func (r *Render) UpdateBucket(dmm *dmmap.Dmm, level int) {
 // ReplaceBucket allows an editing pane to display a differently sized scene.
 func (r *Render) ReplaceBucket(dmm *dmmap.Dmm, level int) {
 	r.bucket = bucket.New()
+	r.sources = make(map[int]*dmmap.Dmm)
 	r.UpdateBucket(dmm, level)
 }
 
 func (r *Render) Draw(width, height float32) {
+	dmicon.AdvanceLiveAnimations()
+	if r.iconRevision != dmicon.LayoutRevision {
+		r.iconRevision = dmicon.LayoutRevision
+		r.bucket = bucket.New()
+		for level, source := range r.sources {
+			r.bucket.UpdateLevel(source, level, nil)
+		}
+	}
 	r.prepare()
 	r.draw(width, height)
 	r.cleanup()

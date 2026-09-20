@@ -213,7 +213,7 @@ func (ws *WsShip) crewMannequin() {
 	}
 	j := c.jobs[c.selected]
 	b, _ := json.Marshal(j)
-	key := fmt.Sprintf("%d:%s", c.direction, b)
+	key := fmt.Sprintf("%d:%d:%s", dmicon.LayoutRevision, c.direction, b)
 	if ws.crewVisual.key != key {
 		ws.crewVisual = buildCrewVisual(ws.project, j, c.direction)
 		ws.crewVisual.key = key
@@ -240,8 +240,9 @@ func (ws *WsShip) crewMannequin() {
 	}
 	pixel := size / 40
 	origin := imgui.Vec2{X: pos.X + 4*pixel, Y: pos.Y + 4*pixel}
+	dmicon.AdvanceLiveAnimations()
 	for _, l := range ws.crewVisual.layers {
-		s := l.sprite
+		s := l.sprite.Current()
 		draw.AddImageV(imgui.TextureID(s.Texture()), origin, imgui.Vec2{X: origin.X + float32(s.IconWidth())*pixel, Y: origin.Y + float32(s.IconHeight())*pixel}, imgui.Vec2{X: s.U1, Y: s.V1}, imgui.Vec2{X: s.U2, Y: s.V2}, imgui.PackedColor(l.color))
 	}
 	label := "Live outfit preview"

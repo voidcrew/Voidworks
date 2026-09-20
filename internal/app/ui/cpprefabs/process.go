@@ -11,6 +11,7 @@ import (
 )
 
 func (p *Prefabs) Process(int32) {
+	p.refreshSprites()
 	if len(p.nodes) == 0 {
 		imgui.TextDisabled("No prefab selected")
 		return
