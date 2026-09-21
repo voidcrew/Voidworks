@@ -314,5 +314,40 @@ class Safety(unittest.TestCase):
         self.assertTrue(self.output.joinpath('linked.png').is_symlink())
         self.assertEqual(target.read_text(), 'keep')
 
+    def use_split_generator(self):
+        script = self.root / 'tools/ship_previews/generate_ship_previews.py'
+        text = script.read_text().replace("(OUTPUT_DIR / 'manifest.json').write_text(json.dumps(manifest))",
+            "(OUTPUT_DIR / 'hull.current.preview.json').write_text(json.dumps(dict(manifest, tile_px=32)))")
+        script.write_text(text)
+
+    def test_migration_cleanup_failure_restores_old_index_and_art(self):
+        self.use_split_generator()
+        original = Path.unlink
+        def fail(path, *args, **kwargs):
+            if path == self.output / 'manifest.json':
+                raise PermissionError('old manifest locked')
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'unlink', fail):
+            with self.assertRaises(PermissionError):
+                self.generate()
+        self.unchanged()
+
+    def test_split_index_validates_duplicates_geometry_and_images(self):
+        self.use_split_generator()
+        self.generate()
+        current = self.output / 'hull.current.preview.json'
+        self.assertEqual(w.checked_manifest(self.output), {'current.png': 'current.png'})
+        duplicate = self.output / 'duplicate.preview.json'
+        duplicate.write_bytes(current.read_bytes())
+        with self.assertRaisesRegex(RuntimeError, 'Duplicate'):
+            w.checked_manifest(self.output)
+        duplicate.unlink()
+        document = json.loads(current.read_text())
+        for value in (dict(document, tile_px=16), dict(document, hulls={}),
+                      dict(document, hulls={'current': {'png': '../outside.png'}})):
+            current.write_text(json.dumps(value))
+            with self.assertRaises(RuntimeError):
+                w.checked_manifest(self.output)
+
 unittest.main(verbosity=2)
 `

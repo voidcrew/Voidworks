@@ -87,11 +87,42 @@ def manifest_images(manifest):
     return images
 
 
+def metadata_files(directory):
+    files = sorted(directory.glob("*.preview.json"))
+    legacy = directory / "manifest.json"
+    if legacy.exists() or legacy.is_symlink():
+        files.append(legacy)
+    return files
+
+
+def read_manifest(directory):
+    files = metadata_files(directory)
+    shards = [path for path in files if path.name != "manifest.json"]
+    if not shards:
+        path = directory / "manifest.json"
+        if not ordinary_file(path):
+            raise RuntimeError("Regular preview metadata is required before cleanup")
+        return read_json(path, None)
+    manifest = {"tile_px": 32, "hulls": {}, "modules": {}}
+    for path in shards:
+        if not ordinary_file(path):
+            raise RuntimeError(f"Preview metadata is missing or linked: {path.name}")
+        document = read_json(path, None)
+        manifest_images(document)
+        if document.get("tile_px") != manifest["tile_px"]:
+            raise RuntimeError(f"Invalid preview tile size: {path.name}")
+        if sum(len(document[group]) for group in ("hulls", "modules")) != 1:
+            raise RuntimeError(f"Expected one hull or module in {path.name}")
+        for group in ("hulls", "modules"):
+            for key, entry in document[group].items():
+                if key in manifest[group]:
+                    raise RuntimeError(f"Duplicate preview metadata: {key}")
+                manifest[group][key] = entry
+    return manifest
+
+
 def checked_manifest(directory):
-    path = directory / "manifest.json"
-    if not ordinary_file(path):
-        raise RuntimeError("A regular preview manifest is required before cleanup")
-    images = manifest_images(read_json(path, None))
+    images = manifest_images(read_manifest(directory))
     for name in images.values():
         if not ordinary_file(directory / name):
             raise RuntimeError(f"Preview manifest image is missing or linked: {name}")
@@ -150,7 +181,7 @@ def backup_cleanup(root, folder, candidates):
         if file_hash(backup / name) != digest:
             raise RuntimeError(f"Preview backup verification failed: {name}")
     write_json(backup / "restore.json", {"directory": str(output), "files": candidates,
-                                         "restore": "Copy these PNG files back to directory. Do not overwrite newer files."})
+                                         "restore": "Copy these files back to directory. Do not overwrite newer files."})
     # This directory is deliberately persistent, even on failure. No automatic
     # retention/deletion: users can recover every removed preview from here.
     return backup
@@ -199,7 +230,11 @@ class IncrementalPreviews:
         self.rendered = 0
         self.reused = 0
         self.legacy = {}
-        manifest = cached_json(output / "manifest.json")
+        try:
+            manifest = read_manifest(output)
+            manifest_images(manifest)
+        except (OSError, ValueError, RuntimeError):
+            manifest = {}
         for group in ("hulls", "modules"):
             entries = manifest.get(group, {})
             if isinstance(entries, dict):
@@ -473,10 +508,21 @@ def publish(root, folder, stage, output, cache, old_images, approved):
     images = checked_manifest(stage)
     # Publish only named images. Extra renderer outputs are not ownership
     # evidence and must never authorize deletion of another file.
-    files = [stage / name for name in sorted(images.values())] + [stage / "manifest.json"]
+    metadata = metadata_files(stage)
+    if len(metadata) > 1 and any(path.name == "manifest.json" for path in metadata):
+        raise RuntimeError("Generator mixed combined and per-entry preview metadata")
+    files = [stage / name for name in sorted(images.values())] + metadata
     output = preview_output(root)
     output.mkdir(parents=True, exist_ok=True)
     candidates = cleanup_candidates(output, images, cache.previous, old_images, approved or {})
+    current_metadata = {path.name for path in metadata}
+    # Metadata is generator-owned. Deleted/renamed entries must disappear from
+    # the game's index even when their old artwork is retained for recovery.
+    for path in metadata_files(output):
+        if path.name not in current_metadata:
+            if not ordinary_file(path):
+                raise RuntimeError(f"Preview metadata is not a regular file: {path.name}")
+            candidates[path.name] = file_hash(path)
     recovery = backup_cleanup(root, folder, candidates)
     backup = stage / "backup"
     backup.mkdir()
