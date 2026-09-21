@@ -87,8 +87,41 @@ def manifest_images(manifest):
     return images
 
 
+def preview_file(directory, name, create_parents=False):
+    """Resolve a portable relative output path without following directory links."""
+    parts = name.split("/")
+    if any(not part or part in (".", "..") or part != part.strip()
+           or part.endswith(".") or any(c in part for c in '<>:"\\|?*\0')
+           or any(ord(c) < 32 for c in part) for part in parts):
+        raise RuntimeError(f"Invalid preview path: {name}")
+    parent = directory
+    for part in parts[:-1]:
+        parent = parent / part
+        if parent.exists() or parent.is_symlink():
+            if linked(parent) or not parent.is_dir():
+                raise RuntimeError(f"Preview directory must not contain links: {parent}")
+        elif create_parents:
+            parent.mkdir()
+    return parent / parts[-1]
+
+
 def metadata_files(directory):
     files = sorted(directory.glob("*.preview.json"))
+
+    def collect(folder):
+        if not folder.exists() and not folder.is_symlink():
+            return
+        if linked(folder) or not folder.is_dir():
+            raise RuntimeError(f"Preview metadata directory must not contain links: {folder}")
+        for path in sorted(folder.iterdir()):
+            preview_file(directory, path.relative_to(directory).as_posix())
+            if path.is_dir() or path.is_symlink():
+                collect(path)
+            elif path.name.endswith(".preview.json"):
+                files.append(path)
+
+    for group in ("hulls", "modules"):
+        collect(directory / group)
     legacy = directory / "manifest.json"
     if legacy.exists() or legacy.is_symlink():
         files.append(legacy)
@@ -174,10 +207,10 @@ def backup_cleanup(root, folder, candidates):
     backups.mkdir(parents=True, exist_ok=True)
     backup = Path(tempfile.mkdtemp(prefix=time.strftime("%Y%m%d-%H%M%S-"), dir=backups))
     for name, digest in candidates.items():
-        source = output / name
+        source = preview_file(output, name)
         if not ordinary_file(source) or file_hash(source) != digest:
             raise RuntimeError(f"Preview changed before backup: {name}. Review cleanup again.")
-        shutil.copy2(source, backup / name)
+        shutil.copy2(source, preview_file(backup, name, create_parents=True))
         if file_hash(backup / name) != digest:
             raise RuntimeError(f"Preview backup verification failed: {name}")
     write_json(backup / "restore.json", {"directory": str(output), "files": candidates,
@@ -515,14 +548,15 @@ def publish(root, folder, stage, output, cache, old_images, approved):
     output = preview_output(root)
     output.mkdir(parents=True, exist_ok=True)
     candidates = cleanup_candidates(output, images, cache.previous, old_images, approved or {})
-    current_metadata = {path.name for path in metadata}
+    current_metadata = {path.relative_to(stage).as_posix() for path in metadata}
     # Metadata is generator-owned. Deleted/renamed entries must disappear from
     # the game's index even when their old artwork is retained for recovery.
     for path in metadata_files(output):
-        if path.name not in current_metadata:
+        name = path.relative_to(output).as_posix()
+        if name not in current_metadata:
             if not ordinary_file(path):
                 raise RuntimeError(f"Preview metadata is not a regular file: {path.name}")
-            candidates[path.name] = file_hash(path)
+            candidates[name] = file_hash(path)
     recovery = backup_cleanup(root, folder, candidates)
     backup = stage / "backup"
     backup.mkdir()
@@ -531,19 +565,20 @@ def publish(root, folder, stage, output, cache, old_images, approved):
     try:
         for source in files:
             preview_output(root)
-            target = output / source.name
+            name = source.relative_to(stage).as_posix()
+            target = preview_file(output, name, create_parents=True)
             existed = target.exists()
             if (existed or target.is_symlink()) and not ordinary_file(target):
                 raise RuntimeError(f"Preview target is not a regular file: {target.name}")
             if existed and target.read_bytes() == source.read_bytes():
                 continue
             if existed:
-                shutil.copy2(target, backup / source.name)
+                shutil.copy2(target, preview_file(backup, name, create_parents=True))
             os.replace(source, target)
             replaced.append((target, existed))
         for name, digest in candidates.items():
             preview_output(root)
-            target = output / name
+            target = preview_file(output, name)
             # A user edit, replacement or link created since review wins.
             if not ordinary_file(target) or file_hash(target) != digest:
                 continue
@@ -552,11 +587,11 @@ def publish(root, folder, stage, output, cache, old_images, approved):
     except BaseException:
         for name in removed:
             # Never overwrite a file created since the removal.
-            with (output / name).open("xb") as restored:
+            with preview_file(output, name, create_parents=True).open("xb") as restored:
                 restored.write((recovery / name).read_bytes())
         for target, existed in reversed(replaced):
             if existed:
-                os.replace(backup / target.name, target)
+                os.replace(backup / target.relative_to(output), target)
             else:
                 target.unlink(missing_ok=True)
         raise

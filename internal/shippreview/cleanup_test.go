@@ -332,6 +332,80 @@ class Safety(unittest.TestCase):
                 self.generate()
         self.unchanged()
 
+    def use_nested_generator(self):
+        script = self.root / 'tools/ship_previews/generate_ship_previews.py'
+        writer = '''for group, key, name in (("hulls", "current", "hulls/current.preview.json"),
+                              ("modules", "current.dmm", "modules/test/workshop/current.preview.json")):
+        document = {"tile_px": 32, "hulls": {}, "modules": {}}
+        document[group][key] = manifest["hulls"]["current"]
+        path = OUTPUT_DIR / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(document))'''
+        script.write_text(GENERATOR.replace("(OUTPUT_DIR / 'manifest.json').write_text(json.dumps(manifest))", writer))
+
+    def snapshot(self):
+        return {p.relative_to(self.output).as_posix(): p.read_bytes()
+                for p in self.output.rglob('*') if p.is_file()}
+
+    def test_nested_publish_failure_restores_same_named_files(self):
+        self.use_nested_generator()
+        self.generate()
+        before = self.snapshot()
+        self.manifest['hulls']['current']['width'] = 64
+        self.root.joinpath('next.json').write_text(json.dumps(self.manifest))
+        original = os.replace
+        def fail(source, target):
+            if Path(target) == self.output / 'modules/test/workshop/current.preview.json':
+                raise PermissionError('module metadata locked')
+            return original(source, target)
+        with patch.object(w.os, 'replace', fail):
+            with self.assertRaises(PermissionError):
+                self.generate()
+        self.assertEqual(before, self.snapshot())
+
+    def test_nested_removal_failure_restores_deleted_metadata(self):
+        self.use_nested_generator()
+        self.generate()
+        before = self.snapshot()
+        (self.root / 'tools/ship_previews/generate_ship_previews.py').write_text(GENERATOR)
+        original = Path.unlink
+        def fail(path, *args, **kwargs):
+            if path == self.output / 'modules/test/workshop/current.preview.json':
+                raise PermissionError('module metadata locked')
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'unlink', fail):
+            with self.assertRaises(PermissionError):
+                self.generate()
+        self.assertEqual(before, self.snapshot())
+        copies = list((self.folder / 'cleanup-backups').glob('*/hulls/current.preview.json'))
+        self.assertEqual(len(copies), 1)
+        self.assertEqual(copies[0].read_bytes(), before['hulls/current.preview.json'])
+
+    def test_linked_metadata_directory_is_rejected(self):
+        target = self.root / 'outside'
+        target.mkdir()
+        sentinel = target / 'keep.preview.json'
+        sentinel.write_text('do not follow')
+        link = self.output / 'modules'
+        if os.name == 'nt':
+            subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(target)], check=True, capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        else:
+            link.symlink_to(target, target_is_directory=True)
+        with self.assertRaises(RuntimeError):
+            w.read_manifest(self.output)
+        self.use_nested_generator()
+        with self.assertRaises(RuntimeError):
+            self.generate()
+        self.assertEqual(sentinel.read_text(), 'do not follow')
+        self.assertEqual((self.output / 'current.png').read_bytes(), self.before['current.png'])
+
+    def test_nested_paths_cannot_escape_output(self):
+        for name in ('../outside.preview.json', '/outside.preview.json', 'C:/outside.preview.json',
+                     'modules/../../outside.preview.json', 'modules\\outside.preview.json'):
+            with self.subTest(name=name), self.assertRaises(RuntimeError):
+                w.preview_file(self.output, name, create_parents=True)
+        self.unchanged()
+
     def test_split_index_validates_duplicates_geometry_and_images(self):
         self.use_split_generator()
         self.generate()
