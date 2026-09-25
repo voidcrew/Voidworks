@@ -108,6 +108,7 @@ func (a *app) checkForUpdatesOnChannel(manual bool, channel selfupdate.Channel) 
 			if release.Version == "" {
 				if manual {
 					a.menu.SetUpToDate(env.Version)
+					a.menu.SetUpdateNotice(release.Notice)
 				}
 				return
 			}
@@ -115,6 +116,7 @@ func (a *app) checkForUpdatesOnChannel(manual bool, channel selfupdate.Channel) 
 				return
 			}
 			a.menu.SetUpdateAvailable(release.Version, release.Description)
+			a.menu.SetUpdateNotice(release.Notice)
 			if a.Prefs().Application.AutoUpdate && release.SwitchFrom == "" {
 				a.selfUpdate()
 			}

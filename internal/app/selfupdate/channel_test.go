@@ -129,11 +129,59 @@ func TestChannelFeedsAndPagination(t *testing.T) {
 	}))
 	defer server.Close()
 	got, err := checkChannel(context.Background(), server.Client(), "0.5.13", Beta, server.URL)
-	if err != nil || got.Version != "0.5.14-beta.10" || len(requests) != 2 {
+	if err != nil || got.Version != "0.5.14-beta.10" || len(requests) != 3 {
 		t.Fatalf("beta feed: %+v %v %v", got, err, requests)
 	}
 	got, err = checkChannel(context.Background(), server.Client(), "0.5.14-beta.10", Stable, server.URL)
-	if err != nil || got.Version != stable.Tag || got.SwitchFrom != "0.5.14-beta.10" || requests[2] != "/latest" {
+	if err != nil || got.Version != stable.Tag || got.SwitchFrom != "0.5.14-beta.10" || requests[3] != "/latest" {
 		t.Fatalf("stable feed: %+v %v %v", got, err, requests)
+	}
+}
+
+func TestBetaBehindStable(t *testing.T) {
+	stable := channelFixture(t, "0.5.32", false)
+	beta := channelFixture(t, "0.5.28-beta.2", true)
+	var betas []githubRelease
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/latest" {
+			_ = json.NewEncoder(w).Encode(stable)
+		} else {
+			_ = json.NewEncoder(w).Encode(betas)
+		}
+	}))
+	defer server.Close()
+	check := func(current string, channel Channel) Release {
+		t.Helper()
+		got, err := checkChannel(context.Background(), server.Client(), current, channel, server.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	betas = []githubRelease{beta, stable}
+	// A beta user is offered Stable, as a switch that never installs itself.
+	got := check("0.5.28-beta.2", Beta)
+	if got.Version != "0.5.32" || got.SwitchFrom != "0.5.28-beta.2" || !CanInstall(got, "0.5.28-beta.2") ||
+		!strings.Contains(got.Notice, "0.5.28-beta.2, is older than Stable 0.5.32") {
+		t.Fatalf("beta user was not moved to newer stable: %+v", got)
+	}
+	// A Stable user choosing Beta is warned instead of offered a downgrade.
+	got = check("0.5.32", Beta)
+	if got.Version != "" || !strings.Contains(got.Notice, "would downgrade") {
+		t.Fatalf("stable user was offered an older beta: %+v", got)
+	}
+	// Without any beta, beta users still reach Stable.
+	betas = []githubRelease{stable}
+	if got = check("0.5.28-beta.2", Beta); got.Version != "0.5.32" || !strings.Contains(got.Notice, "newer than any beta") {
+		t.Fatalf("beta user without betas: %+v", got)
+	}
+	// A beta ahead of Stable behaves as before.
+	newer := channelFixture(t, "0.5.33-beta.1", true)
+	betas = []githubRelease{newer, beta, stable}
+	if got = check("0.5.28-beta.2", Beta); got.Version != "0.5.33-beta.1" || got.Notice != "" {
+		t.Fatalf("newer beta: %+v", got)
+	}
+	if got = check("0.5.32", Beta); got.Version != "0.5.33-beta.1" || got.SwitchFrom != "0.5.32" || got.Notice != "" {
+		t.Fatalf("stable to newer beta: %+v", got)
 	}
 }

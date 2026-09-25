@@ -47,7 +47,7 @@ func (a *commandTestApp) OnWorkspaceSwitched() {
 }
 func (*commandTestApp) AddMouseChangeCallback(func(uint, uint)) int { return 0 }
 func (*commandTestApp) RemoveMouseChangeCallback(int)               {}
-func (a *commandTestApp) ShipFilesSaved()                           { a.previewRequests++ }
+func (a *commandTestApp) ShipFilesSaved(...string)                  { a.previewRequests++ }
 func (*commandTestApp) ShipPreviewStatus() shippreview.Status       { return shippreview.Status{} }
 
 func commandShipFixture(t *testing.T) *dmenv.Dme {

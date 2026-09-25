@@ -226,7 +226,7 @@ func (ws *WsShip) controls() {
 	ws.removalRecovery()
 	ws.recoveryStatus()
 	if app, ok := ws.app.(interface{ ShipPreviewStatus() shippreview.Status }); ok {
-		resume := ws.notifySaved
+		resume := func() { ws.notifySaved() }
 		var stop func()
 		if controls, ok := ws.app.(interface {
 			ResumeShipPreviews()

@@ -28,6 +28,8 @@ type Status struct {
 	PID          int     `json:"pid"`
 	Updated      float64 `json:"updated"`
 	Message, Log string
+	// Outdated counts previews of unsaved maps that the last pass kept as they were.
+	Outdated int `json:"-"`
 }
 
 type Client struct {
@@ -87,11 +89,38 @@ func python() (string, []string, error) {
 	return "", nil, fmt.Errorf("install Python 3 with Pillow, then restart the editor")
 }
 
-// Request starts the helper before returning, without waiting for generation.
+// Request refreshes every outdated or missing preview.
+// Requests start the helper before returning, without waiting for generation.
 // This also covers Save when closing the editor: no pending launch goroutine
 // can be lost during shutdown. The helper owns one queue per project.
 func (c *Client) Request(root, environment string) {
-	c.request(root, environment, false, "")
+	c.save(root, environment, "--all")
+}
+
+// RequestSaved refreshes only the saved maps and missing previews. Other ships
+// keep their committed previews, even outdated ones, so saves stay focused.
+func (c *Client) RequestSaved(root, environment string, paths ...string) {
+	options := []string{}
+	for _, path := range paths {
+		if IsShipMap(root, path) {
+			options = append(options, "--map", path)
+		}
+	}
+	c.save(root, environment, options...)
+}
+
+// RefreshOutdated is the explicit command to bring every ship up to date.
+func (c *Client) RefreshOutdated(root, environment string) {
+	c.request(root, environment, false, "", "--resume", "--all")
+}
+
+func (c *Client) save(root, environment string, options ...string) {
+	var queue struct{ Paused bool }
+	data, _ := os.ReadFile(filepath.Join(c.folder(root), "request.json"))
+	if json.Unmarshal(data, &queue) == nil && queue.Paused {
+		return
+	}
+	c.request(root, environment, false, "", options...)
 }
 
 // RequestFull also refreshes unchanged maps after icon or rendering-code edits.
@@ -109,13 +138,6 @@ func (c *Client) Stop(root, environment string) {
 
 func (c *Client) request(root, environment string, force bool, cleanup string, options ...string) {
 	folder := c.folder(root)
-	if !force && cleanup == "" && len(options) == 0 {
-		var queue struct{ Paused bool }
-		data, _ := os.ReadFile(filepath.Join(folder, "request.json"))
-		if json.Unmarshal(data, &queue) == nil && queue.Paused {
-			return
-		}
-	}
 	c.mu.Lock()
 	c.status[folder] = Status{Phase: "starting", Message: "Starting preview generation...", Log: filepath.Join(folder, "generation.log")}
 	if len(options) > 0 && options[0] == "--stop" {
@@ -232,8 +254,13 @@ func (c *Client) Status(root string) Status {
 			status.Message += "\n" + line
 		}
 	case "complete":
-		status.Message = "Purchase previews are up to date."
+		status.Message, status.Outdated = "Purchase previews are up to date.", 0
 		if line := lastLine(status.Log); strings.HasPrefix(line, "Preview images: ") {
+			var outdated int
+			if _, err := fmt.Sscanf(line[strings.LastIndex(line, ", ")+2:], "%d outdated kept", &outdated); err == nil {
+				status.Outdated = outdated
+				status.Message = fmt.Sprintf("Previews for your saved maps are up to date. %d previews of other maps are outdated and were left alone.", outdated)
+			}
 			status.Message += "\n" + line
 		}
 	case "failed":

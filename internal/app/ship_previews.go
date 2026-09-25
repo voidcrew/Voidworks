@@ -13,16 +13,17 @@ import (
 	"sdmm/internal/shippreview"
 )
 
-func (a *app) ShipFilesSaved() {
+// ShipFilesSaved refreshes previews for the saved maps only.
+func (a *app) ShipFilesSaved(paths ...string) {
 	dme := a.LoadedEnvironment()
 	if dme != nil {
-		a.previews.Request(dme.RootDir, dme.RootFile)
+		a.previews.RequestSaved(dme.RootDir, dme.RootFile, paths...)
 	}
 }
 
 func (a *app) MapFileSaved(path string) {
 	if dme := a.LoadedEnvironment(); dme != nil && shippreview.IsShipMap(dme.RootDir, path) {
-		a.ShipFilesSaved()
+		a.ShipFilesSaved(path)
 	}
 }
 
@@ -66,7 +67,7 @@ func (a *app) DoShipPreviews() {
 			defer imgui.EndChild()
 			imgui.PushTextWrapPosV(0)
 			defer imgui.PopTextWrapPos()
-			imgui.TextWrapped("Ship saves refresh changed or missing purchase previews in the background and reuse unchanged images. You can keep editing or close the editor while they finish.")
+			imgui.TextWrapped("Ship saves refresh the purchase previews of the maps you saved, plus any missing previews, in the background. You can keep editing or close the editor while they finish.")
 			workshop.Gap()
 			status := a.ShipPreviewStatus()
 			workshop.PreviewStatus(status, a.ResumeShipPreviews, a.StopShipPreviews)
@@ -74,6 +75,12 @@ func (a *app) DoShipPreviews() {
 				imgui.TextWrapped("No preview generation has run for this project yet.")
 			}
 			if status.Phase == "" || status.Phase == "complete" || status.Phase == "stopped" {
+				imgui.TextWrapped("Saves only refresh the maps you saved. If other ships' maps were changed without new previews, refresh the outdated previews on purpose and commit them separately.")
+				if imgui.Button("Refresh outdated previews") {
+					if dme := a.LoadedEnvironment(); dme != nil {
+						a.previews.RefreshOutdated(dme.RootDir, dme.RootFile)
+					}
+				}
 				imgui.TextWrapped("After changing icons or rendering code, rebuild all previews to refresh unchanged maps too.")
 				if imgui.Button("Rebuild all previews") {
 					if dme := a.LoadedEnvironment(); dme != nil {

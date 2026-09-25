@@ -166,6 +166,63 @@ def file_hash(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def valid_image(path):
+    if not ordinary_file(path):
+        return False
+    from PIL import Image
+    try:
+        with Image.open(path) as image:
+            image.verify()
+        return True
+    except (OSError, ValueError, SyntaxError):
+        return False
+
+
+def keep_metadata(stage, output, kept):
+    """Give previews kept for unsaved maps their committed metadata back.
+
+    The generator hashes every current map. A kept image must keep its old
+    hash, or the game's preview test would accept an outdated image as fresh."""
+    if not kept:
+        return
+    for path in metadata_files(stage):
+        name = path.relative_to(stage).as_posix()
+        document = read_json(path, None)
+        entries = []
+
+        def collect(entry):
+            if isinstance(entry, dict):
+                if isinstance(entry.get("png"), str):
+                    entries.append(entry)
+                for theme in (entry.get("themes") or {}).values():
+                    collect(theme)
+
+        for group in ("hulls", "modules"):
+            for entry in ((document or {}).get(group) or {}).values():
+                collect(entry)
+        images = {entry["png"] for entry in entries}
+        if not images or images.isdisjoint(kept):
+            continue
+        previous = output / name
+        if images <= kept.keys() and ordinary_file(previous):
+            # Nothing in this file was saved: keep the committed bytes exactly.
+            try:
+                committed = set(manifest_images(read_json(previous, None)).values())
+            except (OSError, ValueError, RuntimeError):
+                committed = None
+            if committed == images:
+                shutil.copyfile(previous, path)
+                continue
+        changed = False
+        for entry in entries:
+            old = kept.get(entry["png"])
+            if isinstance(old, str) and entry.get("src_md5") != old:
+                entry["src_md5"] = old
+                changed = True
+        if changed:
+            path.write_text(json.dumps(document, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def cleanup_plan(root):
     output = preview_output(root)
     images = checked_manifest(output)
@@ -244,7 +301,7 @@ def cached_json(path):
 class IncrementalPreviews:
     """Reuse map renders while the project generator rebuilds current geometry."""
 
-    def __init__(self, settings, script, environment, output, folder, force, rebuild=None):
+    def __init__(self, settings, script, environment, output, folder, force, rebuild=None, targets=None):
         self.settings = settings
         self.script = script
         self.environment = environment
@@ -253,6 +310,10 @@ class IncrementalPreviews:
         self.previous = cached_json(self.cache_path)
         self.force = force
         self.rebuild = rebuild
+        # Saves refresh only their own maps. None refreshes every outdated map.
+        self.targets = targets
+        self.kept = {}
+        self.outdated = []
         self.progress_dir = folder / "render-progress"
         self.progress_path = self.progress_dir / "index.json"
         self.progress = cached_json(self.progress_path)
@@ -386,6 +447,20 @@ class IncrementalPreviews:
         legacy = (not self.force
                   and isinstance(self.legacy.get(name), str)
                   and self.legacy.get(name) in self.digests[source])
+        if (not self.force and self.targets is not None
+                and os.path.normcase(str(source)) not in self.targets and valid_image(target)):
+            # Another ship's committed preview is not this save's business, even
+            # when its map changed elsewhere. Keep its image and source hash so
+            # it stays visibly outdated instead of landing in unrelated diffs.
+            shutil.copy2(target, destination)
+            self.kept[name] = self.legacy.get(name)
+            if not legacy and not (matching and previous.get("png_sha256") == file_hash(target)):
+                self.outdated.append(name)
+                print(f"Keeping outdated preview: {name} (its map was not saved)", flush=True)
+            self.images[name] = {**record, "src_md5": self.kept[name], "png_sha256": file_hash(destination)}
+            self.reused += 1
+            print(f"Preview progress: {self.rendered} rendered, {self.reused} reused ({name}).", flush=True)
+            return
         progress = self.progress.get(name, {})
         if not isinstance(progress, dict):
             progress = {}
@@ -503,15 +578,21 @@ def publication(folder, revision):
         yield
 
 
-def generate(root, environment, folder, force=False, approved=None, revision=0, rebuild=None, stage=None):
-    print("Preview refresh: " + ("full rebuild requested" if force else "incremental; reuse unchanged images") + ".", flush=True)
+def generate(root, environment, folder, force=False, approved=None, revision=0, rebuild=None, stage=None, maps=None):
+    if force:
+        print("Preview refresh: full rebuild requested.", flush=True)
+    elif maps is None:
+        print("Preview refresh: incremental; reuse unchanged images.", flush=True)
+    else:
+        print(f"Preview refresh: incremental; {len(maps)} saved maps, keep previews of other maps.", flush=True)
+    targets = None if maps is None else {os.path.normcase(str((root / path).resolve())) for path in maps}
     script = root / "tools/ship_previews/generate_ship_previews.py"
     # Run the project's maintained implementation, including its smoothing fixes.
     namespace = runpy.run_path(str(script))
     settings = namespace["main"].__globals__
     output = preview_output(root)
     output.parent.mkdir(parents=True, exist_ok=True)
-    cache = IncrementalPreviews(settings, script, environment, output, folder, force, rebuild)
+    cache = IncrementalPreviews(settings, script, environment, output, folder, force, rebuild, targets)
     try:
         old_images = checked_manifest(output)
     except (OSError, ValueError, RuntimeError):
@@ -528,12 +609,14 @@ def generate(root, environment, folder, force=False, approved=None, revision=0, 
         settings["OUTPUT_DIR"] = stage
         settings["ENVIRONMENT"] = str(environment)
         namespace["main"]()
+        keep_metadata(stage, output, cache.kept)
         with publication(folder, revision):
             publish(root, folder, stage, output, cache, old_images, approved)
             if incremental:
                 cache.save()
     print("Purchase previews updated.", flush=True)
-    print(f"Preview images: {cache.rendered} rendered, {cache.reused} reused.", flush=True)
+    outdated = f", {len(cache.outdated)} outdated kept" if cache.outdated else ""
+    print(f"Preview images: {cache.rendered} rendered, {cache.reused} reused{outdated}.", flush=True)
 
 
 def publish(root, folder, stage, output, cache, old_images, approved):
@@ -675,7 +758,18 @@ def stop(folder):
                                                 "queued": False, "updated": time.time()})
 
 
-def request(folder, root, environment, force=False, approved=None, resume=False):
+def queued_maps(item):
+    # A queue left by an older helper names no maps: repair missing previews
+    # only, so updating the editor cannot sweep outdated ships into a diff.
+    return set(item.get("maps", [])), bool(item.get("all", False))
+
+
+def merge_maps(item, maps, refresh):
+    current, everything = queued_maps(item)
+    return {**item, "maps": sorted(current | set(maps)), "all": everything or refresh}
+
+
+def request(folder, root, environment, force=False, approved=None, resume=False, maps=(), refresh=False):
     queue = folder / "request.json"
     state = folder / "status.json"
     # Queue changes and worker shutdown share a short lock, so a save arriving
@@ -691,6 +785,13 @@ def request(folder, root, environment, force=False, approved=None, resume=False)
             write_json(state, status)
             return  # Saves do not restart previews after an explicit stop.
         revision = previous["revision"] + 1
+        saved = []
+        for path in maps:
+            try:
+                saved.append(Path(os.path.relpath(Path(path).resolve(), root.resolve())).as_posix())
+            except ValueError:
+                pass  # Another drive cannot hold one of this project's maps.
+        previous = merge_maps(previous, saved, refresh)
         write_json(queue, {**previous, "revision": revision, "root": str(root), "environment": str(environment),
                            "paused": False,
                            "rebuild": str(time.time_ns()) if force else previous.get("rebuild"),
@@ -707,17 +808,19 @@ def request(folder, root, environment, force=False, approved=None, resume=False)
             return
         interrupted = read_json(state, {}).get("phase") == "running"
         active = read_json(folder / "active-request.json", {})
-        if interrupted and active.get("force"):
+        if interrupted and active:
             latest = read_json(queue, {})
-            latest["force"] = True
-            latest["rebuild"] = latest.get("rebuild") or active.get("rebuild")
-            write_json(queue, latest)
+            if active.get("force"):
+                latest["force"] = True
+                latest["rebuild"] = latest.get("rebuild") or active.get("rebuild")
+            write_json(queue, merge_maps(latest, *queued_maps(active)))
         while True:
             item = read_json(queue, {})
             revision = item["revision"]
+            item = merge_maps(item, (), False)
             # A full rebuild belongs to this pass. Later saves queue an ordinary
             # incremental pass unless another full rebuild is requested.
-            write_json(queue, {**item, "force": False, "cleanup": {}})
+            write_json(queue, {**item, "force": False, "cleanup": {}, "maps": [], "all": False})
             current = folder / "active-request.json"
             output = preview_output(Path(item["root"]))
             output.parent.mkdir(parents=True, exist_ok=True)
@@ -746,10 +849,13 @@ def request(folder, root, environment, force=False, approved=None, resume=False)
             guard.__enter__()
             latest = read_json(queue, {})
             stopped = stopped or cancelled(folder, revision)
-            if process.returncode != 0 and not stopped:
-                latest["force"] = latest.get("force", False) or item.get("force", False)
-                latest["cleanup"] = {**item.get("cleanup", {}), **latest.get("cleanup", {})}
-                latest["rebuild"] = latest.get("rebuild") or item.get("rebuild")
+            if process.returncode != 0:
+                # Saved maps still need their previews after a failure or a stop.
+                latest = merge_maps(latest, *queued_maps(item))
+                if not stopped:
+                    latest["force"] = latest.get("force", False) or item.get("force", False)
+                    latest["cleanup"] = {**item.get("cleanup", {}), **latest.get("cleanup", {})}
+                    latest["rebuild"] = latest.get("rebuild") or item.get("rebuild")
                 write_json(queue, latest)
             if not latest.get("paused") and latest["revision"] != revision:
                 continue
@@ -771,7 +877,9 @@ if __name__ == "__main__":
         folder = Path(sys.argv[2])
         item = read_json(folder / "active-request.json", {})
         try:
-            generate(Path(item["root"]), Path(item["environment"]), folder, item.get("force", False), item.get("cleanup", {}), item["revision"], item.get("rebuild"), item.get("stage"))
+            maps, everything = queued_maps(item)
+            generate(Path(item["root"]), Path(item["environment"]), folder, item.get("force", False), item.get("cleanup", {}),
+                     item["revision"], item.get("rebuild"), item.get("stage"), None if everything else sorted(maps))
         except PreviewStopped:
             print("Preview generation stopped. Completed renders are saved for resuming.", flush=True)
     elif "--stop" in sys.argv[4:]:
@@ -792,7 +900,10 @@ if __name__ == "__main__":
                     raise RuntimeError("Cleanup review belongs to a different project")
                 approved = {entry["name"]: entry["sha256"] for entry in plan["files"]}
                 plan_path.unlink()
-            request(folder, Path(sys.argv[2]), Path(sys.argv[3]), "--force" in sys.argv[4:], approved, "--resume" in sys.argv[4:])
+            options = sys.argv[4:]
+            maps = [options[i + 1] for i, option in enumerate(options[:-1]) if option == "--map"]
+            request(folder, Path(sys.argv[2]), Path(sys.argv[3]), "--force" in options, approved, "--resume" in options,
+                    maps, "--all" in options)
         except BaseException:
             with (folder / "generation.log").open("a", encoding="utf-8") as log:
                 traceback.print_exc(file=log)

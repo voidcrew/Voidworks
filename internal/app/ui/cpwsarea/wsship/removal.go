@@ -41,11 +41,12 @@ func (ws *WsShip) requestRemoval(h ship.Hull) *workshop.RemovalConfirmation {
 	}
 	if len(others) > 0 {
 		dialog.Open(dialog.TypeConfirmation{Title: "Save other ships first?", Question: "Save changes to the other ships before reviewing removal? Changes to " + h.Name + " will not be saved.", ActionYes: func() {
-			if err := ship.SaveProjects(others); err != nil {
+			written, err := ship.SaveProjectsReporting(others)
+			if err != nil {
 				ws.message = err.Error()
 				return
 			}
-			ws.notifySaved()
+			ws.notifySaved(written...)
 			ws.requestRemoval(h)
 		}, ActionCancel: func() {}})
 		return nil

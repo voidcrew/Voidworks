@@ -482,7 +482,7 @@ func (ws *WsShip) Save() bool {
 	for _, p := range ws.projects {
 		projects = append(projects, p)
 	}
-	warnings, err := ship.SaveProjectsWithWarnings(projects)
+	warnings, written, err := ship.SaveProjectsWithWarnings(projects)
 	if err != nil {
 		ws.message = err.Error()
 		return false
@@ -500,13 +500,13 @@ func (ws *WsShip) Save() bool {
 			log.Warn().Str("file", warning.Path).Str("backup", warning.Backup).Msg("Save replaced external changes")
 		}
 	}
-	ws.notifySaved()
+	ws.notifySaved(written...)
 	return true
 }
 
-func (ws *WsShip) notifySaved() {
-	if app, ok := ws.app.(interface{ ShipFilesSaved() }); ok {
-		app.ShipFilesSaved()
+func (ws *WsShip) notifySaved(paths ...string) {
+	if app, ok := ws.app.(interface{ ShipFilesSaved(...string) }); ok {
+		app.ShipFilesSaved(paths...)
 	}
 }
 func (ws *WsShip) flush() {

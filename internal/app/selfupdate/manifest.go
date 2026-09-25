@@ -25,6 +25,8 @@ type Release struct {
 	SHA256      string
 	Size        int64
 	SwitchFrom  string
+	// Notice explains a channel problem, such as Beta falling behind Stable.
+	Notice string
 }
 
 type githubRelease struct {

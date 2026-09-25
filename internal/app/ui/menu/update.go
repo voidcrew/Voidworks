@@ -26,6 +26,9 @@ func (m *Menu) showUpdateMenu() {
 	case upStatusError:
 		label = "Update needs attention"
 	}
+	if m.updateNotice != "" && m.updateStatus == upStatusAvailable {
+		label = "Beta is behind Stable"
+	}
 	w.Button(icon.SystemUpdate+" "+label+"##update_status", m.ShowUpdatePopup).
 		Style(style.ButtonFrame{}).TextColor(style.Teal).Build()
 	if m.updateOpen {
@@ -51,9 +54,18 @@ func (m *Menu) showUpdateMenu() {
 				imgui.EndCombo()
 			}
 		}
-		switching := m.updateChannel.Valid() && m.updateChannel != selfupdate.CurrentChannel(env.Version)
+		target := m.updateChannel
+		if m.updateVersion != "" && m.updateStatus != upStatusCurrent {
+			target = selfupdate.CurrentChannel(m.updateVersion)
+		}
+		switching := target.Valid() && target != selfupdate.CurrentChannel(env.Version)
 		if m.updateChannel == selfupdate.Beta {
 			imgui.TextWrapped("Beta includes features still being tested.")
+		}
+		if m.updateNotice != "" {
+			imgui.PushStyleColor(imgui.StyleColorText, style.Amber)
+			imgui.TextWrapped(m.updateNotice)
+			imgui.PopStyleColor()
 		}
 		imgui.Separator()
 		if m.updateVersion != "" {
@@ -73,17 +85,20 @@ func (m *Menu) showUpdateMenu() {
 		case upStatusChecking:
 			imgui.Text("Checking GitHub for updates...")
 		case upStatusCurrent:
-			imgui.Text("You're using the latest available version.")
+			if m.updateNotice == "" {
+				imgui.Text("You're using the latest available version.")
+			}
 			w.Button("Done", m.doHideUpdateButton).Build()
 		case upStatusAvailable:
 			label := "Download update"
 			if switching {
-				label = "Download " + m.updateChannel.Label()
+				label = "Download " + target.Label()
 			}
 			if workshop.Button(label, true) {
 				m.app.DoSelfUpdate()
 			}
-			if !switching {
+			// A switch the updater offered (not one picked in the menu) can be skipped.
+			if !switching || target != m.updateChannel {
 				w.Button("Skip this version", m.doIgnoreUpdate).Build()
 			}
 		case upStatusUpdating:
@@ -93,7 +108,7 @@ func (m *Menu) showUpdateMenu() {
 			imgui.Text("The update is ready. Save prompts appear before restarting.")
 			label := "Update & restart"
 			if switching {
-				label = "Switch to " + m.updateChannel.Label() + " & restart"
+				label = "Switch to " + target.Label() + " & restart"
 			}
 			if workshop.Button(label, true) {
 				imgui.CloseCurrentPopup()
@@ -115,7 +130,7 @@ func (m *Menu) ShowUpdatePopup()                            { m.updateOpen = tru
 func (m *Menu) SetUpdateChannel(channel selfupdate.Channel) { m.updateChannel = channel }
 func (m *Menu) SetChecking() {
 	m.updateStatus = upStatusChecking
-	m.updateError, m.updateDescription, m.updateVersion = "", "", ""
+	m.updateError, m.updateDescription, m.updateVersion, m.updateNotice = "", "", "", ""
 }
 func (m *Menu) SetUpToDate(version string) {
 	m.updateStatus = upStatusCurrent

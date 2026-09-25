@@ -123,14 +123,21 @@ func checkChannel(ctx context.Context, client *http.Client, current string, chan
 	if _, err := parseVersion(current); err != nil {
 		return Release{}, fmt.Errorf("development builds do not receive automatic updates")
 	}
-	if channel == Stable {
+	latestStable := func() (githubRelease, error) {
 		data, err := readReleaseData(ctx, client, api+"/latest")
 		if err != nil {
-			return Release{}, err
+			return githubRelease{}, err
 		}
 		var source githubRelease
 		if err := json.Unmarshal(data, &source); err != nil {
-			return Release{}, fmt.Errorf("read release details: %w", err)
+			return githubRelease{}, fmt.Errorf("read release details: %w", err)
+		}
+		return source, nil
+	}
+	if channel == Stable {
+		source, err := latestStable()
+		if err != nil {
+			return Release{}, err
 		}
 		return parseChannelRelease(source, current, channel)
 	}
@@ -155,6 +162,26 @@ func checkChannel(ctx context.Context, client *http.Client, current string, chan
 		}
 		if len(releases) < 100 {
 			break
+		}
+	}
+	// Stable releases often promote a beta and move past it. Beta users must
+	// not sit on an older build, and Stable users must not "switch" backwards.
+	if stable, err := latestStable(); err == nil && !stable.Draft && !stable.Prerelease &&
+		(latest.Tag == "" || Newer(stable.Tag, latest.Tag)) {
+		stableVersion := strings.TrimPrefix(stable.Tag, "v")
+		behind := "Stable " + stableVersion + " is newer than any beta"
+		if latest.Tag != "" {
+			behind = "The newest beta, " + strings.TrimPrefix(latest.Tag, "v") + ", is older than Stable " + stableVersion
+		}
+		if CurrentChannel(current) == Stable {
+			return Release{Notice: behind + ", so switching now would downgrade. Stay on Stable until a newer beta is published."}, nil
+		}
+		if Newer(stable.Tag, current) {
+			release, err := parseChannelRelease(stable, current, Stable)
+			if err == nil && release.Version != "" {
+				release.Notice = "Beta is behind Stable. " + behind + ", which has fixes this beta lacks. Switch to Stable."
+				return release, nil
+			}
 		}
 	}
 	if latest.Tag == "" {

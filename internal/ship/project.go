@@ -688,20 +688,39 @@ func (p *Project) accept(changes []FileChange) error {
 // SaveProjects also merges the shared environment includes when several ships
 // are created in one session. All outputs share one preflight and rollback.
 func SaveProjects(projects []*Project) error {
-	return saveProjects(projects, nil)
+	_, err := SaveProjectsReporting(projects)
+	return err
+}
+
+// SaveProjectsReporting is SaveProjects that also returns the files written,
+// so callers can refresh only those.
+func SaveProjectsReporting(projects []*Project) ([]string, error) {
+	changes, err := saveProjects(projects, nil)
+	return writtenFiles(changes), err
 }
 
 // SaveProjectsWithWarnings permits external edits to be replaced and keeps their
 // disk versions as backups. Validation and transactional rollback still apply.
-func SaveProjectsWithWarnings(projects []*Project) ([]SaveWarning, error) {
+// It also returns the files written.
+func SaveProjectsWithWarnings(projects []*Project) ([]SaveWarning, []string, error) {
 	var warnings []SaveWarning
-	err := saveProjects(projects, &warnings)
-	return warnings, err
+	changes, err := saveProjects(projects, &warnings)
+	return warnings, writtenFiles(changes), err
 }
 
-func saveProjects(projects []*Project, warnings *[]SaveWarning) error {
+func writtenFiles(changes []FileChange) []string {
+	written := []string{}
+	for _, c := range changes {
+		if !c.Delete {
+			written = append(written, c.Path)
+		}
+	}
+	return written
+}
+
+func saveProjects(projects []*Project, warnings *[]SaveWarning) ([]FileChange, error) {
 	if len(projects) == 0 {
-		return nil
+		return nil, nil
 	}
 	preserve := map[string]bool{}
 	if warnings != nil {
@@ -719,11 +738,11 @@ func saveProjects(projects []*Project, warnings *[]SaveWarning) error {
 	removedIncludes := map[string]map[string]bool{}
 	for _, p := range projects {
 		if p.Catalog.Root != root {
-			return fmt.Errorf("save projects from one environment at a time")
+			return nil, fmt.Errorf("save projects from one environment at a time")
 		}
 		changes, err := p.Changes()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, c := range changes {
 			if c.Path == p.Dme.RootFile {
@@ -743,7 +762,7 @@ func saveProjects(projects []*Project, warnings *[]SaveWarning) error {
 			}
 			if prior, ok := files[c.Path]; ok {
 				if c.Path != p.Dme.RootFile || !bytes.Equal(c.Before, prior.Before) {
-					return fmt.Errorf("conflicting save destination %s", c.Path)
+					return nil, fmt.Errorf("conflicting save destination %s", c.Path)
 				}
 				merged := string(prior.After)
 				for _, line := range strings.Split(string(c.After), "\n") {
@@ -754,7 +773,7 @@ func saveProjects(projects []*Project, warnings *[]SaveWarning) error {
 					if parts := strings.SplitN(line, "\"", 3); len(parts) == 3 {
 						file, err := Inside(root, strings.ReplaceAll(parts[1], "\\", "/"))
 						if err != nil {
-							return err
+							return nil, err
 						}
 						merged = string(addInclude([]byte(merged), root, file))
 					}
@@ -781,12 +800,12 @@ func saveProjects(projects []*Project, warnings *[]SaveWarning) error {
 	}
 	sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
 	if err := writeChangesWithWarnings(root, changes, os.Rename, warnings, preserve); err != nil {
-		return err
+		return nil, err
 	}
 	for _, p := range projects {
 		if err := p.accept(changes); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return changes, nil
 }

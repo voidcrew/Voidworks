@@ -121,6 +121,7 @@ type Menu struct {
 	updateVersion     string
 	updateDescription string
 	updateError       string
+	updateNotice      string
 	updateOpen        bool
 	updateChannel     selfupdate.Channel
 }
@@ -335,6 +336,9 @@ func (m *Menu) SetUpdateAvailable(version, description string) {
 	m.updateDescription = description
 	m.updateError = ""
 }
+
+// SetUpdateNotice shows a release channel warning, such as Beta being behind Stable.
+func (m *Menu) SetUpdateNotice(notice string) { m.updateNotice = notice }
 
 func (m *Menu) SetUpdating() {
 	m.updateStatus = upStatusUpdating
