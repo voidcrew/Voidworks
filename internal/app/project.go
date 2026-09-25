@@ -134,6 +134,7 @@ func (a *app) forceLoadEnvironment(path string, callback func()) {
 
 		log.Print("environment opened:", path)
 		a.offerShipRecovery()
+		a.checkGameCode()
 
 		if callback != nil {
 			callback()

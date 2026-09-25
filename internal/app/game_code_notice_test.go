@@ -1,41 +1,13 @@
 package app
 
 import (
-	"path/filepath"
 	"runtime"
 	"testing"
 
+	"sdmm/internal/gamecompat"
+
 	"github.com/SpaiR/imgui-go"
 )
-
-func TestGameCodeNoticeAcknowledgmentPersists(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "config")
-	a := &app{configDir: dir}
-	a.loadNotices()
-	cfg := a.ConfigFind("notices").(*noticesConfig)
-	if cfg.RoomCrewUpdateSeen {
-		t.Fatal("new installs should show the game-code notice")
-	}
-	// Opening the notice is not an acknowledgment, including after a restart.
-	a.configSave()
-	restarted := &app{configDir: dir}
-	loaded := &noticesConfig{}
-	restarted.ConfigRegister(loaded)
-	if loaded.RoomCrewUpdateSeen {
-		t.Fatal("notice was dismissed without acknowledgment")
-	}
-	a.acknowledgeGameCodeUpdate(cfg)
-	// An older build can keep saving app.json without losing the acknowledgment.
-	older := &app{configDir: dir}
-	older.loadConfig()
-	older.configSave()
-	restarted = &app{configDir: dir}
-	loaded = &noticesConfig{}
-	restarted.ConfigRegister(loaded)
-	if !loaded.RoomCrewUpdateSeen {
-		t.Fatal("acknowledged notice reappeared after restart")
-	}
-}
 
 func TestGameCodeNoticeWaitsForOtherDialogs(t *testing.T) {
 	runtime.LockOSThread()
@@ -48,7 +20,6 @@ func TestGameCodeNoticeWaitsForOtherDialogs(t *testing.T) {
 	io.SetDeltaTime(1.0 / 60)
 	io.Fonts().TextureDataRGBA32()
 	a := &app{configDir: t.TempDir()}
-	a.loadNotices()
 	frame := func(loading, closeLoading bool) bool {
 		imgui.NewFrame()
 		if loading {
@@ -61,16 +32,33 @@ func TestGameCodeNoticeWaitsForOtherDialogs(t *testing.T) {
 			}
 			imgui.EndPopup()
 		}
-		a.showGameCodeUpdateNotice()
+		a.showGameCodeNotice()
 		shown := imgui.IsPopupOpen(gameCodeNoticeTitle)
 		imgui.Render()
 		return shown
 	}
-	if frame(true, false) || frame(false, false) {
-		t.Fatal("startup notice replaced the loading dialog")
+	// Compatible code never shows the notice.
+	if frame(false, false) {
+		t.Fatal("notice shown for compatible game code")
 	}
-	frame(false, true)
-	if !frame(false, false) || a.notices.RoomCrewUpdateSeen {
-		t.Fatal("notice did not appear after loading or was acknowledged automatically")
+	for _, status := range []gamecompat.Status{gamecompat.GameOutdated, gamecompat.EditorOutdated} {
+		a.gameCode = gamecompat.Result{Status: status, GameAPI: 2, Missing: []string{"a feature"}}
+		a.gameCodePending = true
+		if frame(true, false) || frame(false, false) {
+			t.Fatal("game code notice replaced the loading dialog")
+		}
+		frame(false, true)
+		if !frame(false, false) {
+			t.Fatal("notice did not appear after loading")
+		}
+		imgui.NewFrame()
+		if imgui.BeginPopupModalV(gameCodeNoticeTitle, nil, 0) {
+			a.dismissGameCodeNotice()
+			imgui.EndPopup()
+		}
+		imgui.Render()
+		if a.gameCodePending || frame(false, false) {
+			t.Fatal("dismissed notice came back before the next project load")
+		}
 	}
 }

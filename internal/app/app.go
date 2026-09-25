@@ -22,6 +22,7 @@ import (
 	"sdmm/internal/dmapi/dmenv"
 	"sdmm/internal/dmapi/dmmclip"
 	"sdmm/internal/env"
+	"sdmm/internal/gamecompat"
 	"sdmm/internal/ship"
 	"sdmm/internal/shippreview"
 	"sdmm/internal/startup"
@@ -93,7 +94,9 @@ type app struct {
 	closing  bool
 	updates  updateState
 	previews *shippreview.Client
-	notices  *noticesConfig
+	// Result of the last project's game code check, and whether to show it.
+	gameCode        gamecompat.Result
+	gameCodePending bool
 
 	shortcutsEnabled bool
 
@@ -135,7 +138,6 @@ func (a *app) initialize() {
 
 	a.UpdateTitle()
 
-	a.loadNotices()
 	a.checkProgramArgs()
 
 	a.updates.ctx, a.updates.cancel = context.WithCancel(context.Background())
@@ -153,7 +155,7 @@ func (a *app) Process() {
 	a.layout.Process()
 
 	dialog.Process()
-	a.showGameCodeUpdateNotice()
+	a.showGameCodeNotice()
 }
 
 func (a *app) PostProcess() {

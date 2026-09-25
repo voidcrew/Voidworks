@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"sdmm/internal/dmapi/dmenv"
 )
 
 const roomCrewField = "job_slots_add_by_theme"
@@ -21,8 +23,10 @@ func RoomCrewIDs(scope string) (module, theme string) {
 
 func roomCrewScope(module, theme string) string { return "module/" + module + "/theme/" + theme }
 
-func (p *Project) SupportsRoomCrewVariants() bool {
-	o := p.Dme.Objects["/datum/ship_upgrade_module"]
+func (p *Project) SupportsRoomCrewVariants() bool { return SupportsRoomCrewVariants(p.Dme) }
+
+func SupportsRoomCrewVariants(dme *dmenv.Dme) bool {
+	o := dme.Objects["/datum/ship_upgrade_module"]
 	return o != nil && o.Vars.ValueV(roomCrewField, "") != ""
 }
 

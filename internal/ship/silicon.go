@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"sdmm/internal/dmapi/dmenv"
 	"sdmm/internal/util"
 )
 
@@ -11,8 +12,10 @@ const AICore = "/obj/structure/ai_core/latejoin_inactive"
 
 func (j CrewJob) IsSilicon() bool { return j.Role == "cyborg" || j.Role == "ai" }
 
-func (p *Project) SupportsSiliconCrew() bool {
-	o := p.Dme.Objects["/datum/job"]
+func (p *Project) SupportsSiliconCrew() bool { return SupportsSiliconCrew(p.Dme) }
+
+func SupportsSiliconCrew(dme *dmenv.Dme) bool {
+	o := dme.Objects["/datum/job"]
 	return o != nil && o.Vars.ValueV("ship_role", "") != ""
 }
 
