@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sdmm/third_party/sdmmparser"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -155,14 +157,25 @@ func (a *app) forceLoadEnvironment(path string, callback func()) {
 			log.Print("unable to open environment by path:", path, err)
 
 			if sdmmparser.IsParserError(err) {
+				layout := w.Layout{w.Text("Unable to open environment: " + path)}
+				if missing := missingIncludes(err.Error()); len(missing) > 0 {
+					layout = append(layout, w.Separator(), w.Custom(func() {
+						imgui.PushTextWrapPosV(620 * window.PointSize())
+						imgui.TextWrapped(fmt.Sprintf("%s includes %d files that are not in this checkout:", filepath.Base(path), len(missing)))
+						for _, file := range missing {
+							imgui.BulletText(file)
+						}
+						imgui.TextWrapped("Your .dme is usually older than the rest of the game code, for example after updating while " +
+							"Voidworks was open. Restore the .dme from the latest game code (in GitHub Desktop, discard its changes), " +
+							"or delete those #include lines from it, then open the project again.")
+						imgui.PopTextWrapPos()
+					}))
+				}
+				layout = append(layout, w.Separator(), w.Text(err.Error()))
 				dialog.Open(dialog.TypeCustom{
 					Title:       "Parser Error!",
 					CloseButton: true,
-					Layout: w.Layout{
-						w.Text("Unable to open environment: " + path),
-						w.Separator(),
-						w.Text(err.Error()),
-					},
+					Layout:      layout,
 				})
 			} else {
 				dialog.Open(dialog.TypeInformation{
@@ -343,4 +356,17 @@ func (a *app) backupMap(path string) string {
 	log.Print("map backup created:", dst)
 
 	return dst
+}
+
+var missingInclude = regexp.MustCompile(`failed to find #include "([^"]+)"`)
+
+// missingIncludes lists the sources a parser error could not find, in order.
+func missingIncludes(message string) []string {
+	var files []string
+	for _, match := range missingInclude.FindAllStringSubmatch(message, -1) {
+		if !slices.Contains(files, match[1]) {
+			files = append(files, match[1])
+		}
+	}
+	return files
 }

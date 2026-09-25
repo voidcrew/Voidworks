@@ -309,13 +309,17 @@ func TestValidationAndConflictingSaves(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A .dme changed after loading (such as a game update) keeps its changes;
+	// only this ruin's include is applied on top.
 	write(t, c.Dme.RootFile, append(read(t, c.Dme.RootFile), []byte("// outside edit\r\n")...))
-	if err = p.Save(); err == nil {
-		t.Fatal("overwrote external project change")
+	if err = p.Save(); err != nil {
+		t.Fatal(err)
 	}
-	if exists(p.Template.File) || exists(p.source.Path) {
-		t.Fatal("conflict created partial output")
+	if dme := string(read(t, c.Dme.RootFile)); !strings.Contains(dme, "// outside edit") || !exists(p.source.Path) {
+		t.Fatalf("save lost the outside .dme edit or the ruin source:\n%s", dme)
 	}
+	s.ID += "_second"
+	s.Properties.Name += " Second"
 	p, err = New(c, s)
 	if err != nil {
 		t.Fatal(err)

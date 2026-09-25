@@ -6,7 +6,11 @@ import (
 	"github.com/rs/zerolog/log"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
+
+	"sdmm/internal/dmapi/dminclude"
 )
 
 type FileChange struct {
@@ -40,6 +44,73 @@ func writeChanges(root string, changes []FileChange, rename func(string, string)
 	return writeChangesWithWarnings(root, changes, rename, nil, nil)
 }
 
+var includeDirective = regexp.MustCompile(`^[\t ]*#include[\t ]+"([^"\r\n]+)"`)
+
+// rebaseEnvironment applies a workshop's .dme edit to the file's current disk
+// contents when the .dme changed after the project loaded. Workshops only add
+// and remove #include lines; replacing the whole file instead would undo a
+// game update pulled while the editor was open and re-add deleted sources.
+func rebaseEnvironment(c FileChange) (FileChange, bool) {
+	if !strings.EqualFold(filepath.Ext(c.Path), ".dme") || c.Delete || !c.Existed {
+		return c, false
+	}
+	disk, err := os.ReadFile(c.Path)
+	if err != nil || bytes.Equal(disk, c.Before) {
+		return c, false
+	}
+	merged, ok := rebaseIncludes(c.Before, c.After, disk)
+	if !ok {
+		return c, false
+	}
+	log.Info().Str("file", c.Path).Msg("Applied workshop includes to the changed environment file")
+	c.Before, c.After = disk, merged
+	return c, true
+}
+
+// rebaseIncludes applies the #include lines added and removed between before
+// and after to disk. It refuses edits that change anything else.
+func rebaseIncludes(before, after, disk []byte) ([]byte, bool) {
+	count := map[string]int{}
+	for _, line := range strings.Split(string(before), "\n") {
+		count[strings.TrimRight(line, "\r")]--
+	}
+	for _, line := range strings.Split(string(after), "\n") {
+		count[strings.TrimRight(line, "\r")]++
+	}
+	added, removed := []string{}, map[string]bool{}
+	for line, n := range count {
+		if n == 0 || strings.TrimSpace(line) == "" {
+			continue
+		}
+		match := includeDirective.FindStringSubmatch(line)
+		if match == nil {
+			return nil, false
+		}
+		if n > 0 {
+			added = append(added, match[1])
+		} else {
+			removed[includeKey(match[1])] = true
+		}
+	}
+	var result strings.Builder
+	for _, line := range strings.SplitAfter(string(disk), "\n") {
+		if match := includeDirective.FindStringSubmatch(line); match != nil && removed[includeKey(match[1])] {
+			continue
+		}
+		result.WriteString(line)
+	}
+	merged := []byte(result.String())
+	sort.Strings(added)
+	for _, name := range added {
+		merged = dminclude.Add(merged, name)
+	}
+	return merged, true
+}
+
+func includeKey(name string) string {
+	return strings.ToLower(strings.ReplaceAll(name, "\\", "/"))
+}
+
 // SaveWarning identifies a replaced file and the retained copy of its disk contents.
 type SaveWarning struct {
 	Path, Backup string
@@ -61,7 +132,7 @@ func writeChangesWithWarnings(root string, changes []FileChange, rename func(str
 			}
 		}
 	}()
-	for _, c := range changes {
+	for i, c := range changes {
 		rel, err := filepath.Rel(root, c.Path)
 		if err != nil {
 			return err
@@ -77,7 +148,12 @@ func writeChangesWithWarnings(root string, changes []FileChange, rename func(str
 		seen[key] = true
 		c.Path = path
 		conflict := preserve[path]
-		if warnings != nil {
+		if rebased, ok := rebaseEnvironment(c); ok {
+			// Keep the disk version's other edits, such as a game update, and
+			// report what was actually written back to the caller.
+			c = rebased
+			changes[i].Before, changes[i].After = c.Before, c.After
+		} else if warnings != nil {
 			data, err := os.ReadFile(path)
 			if err != nil && !os.IsNotExist(err) {
 				return err

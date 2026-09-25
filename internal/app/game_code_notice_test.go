@@ -62,3 +62,17 @@ func TestGameCodeNoticeWaitsForOtherDialogs(t *testing.T) {
 		}
 	}
 }
+
+func TestMissingIncludesFromParserError(t *testing.T) {
+	message := `parser error: compilation errors
+  C:\Voidcrew\tgstation.dme - [7147:1] | failed to find #include "voidcrew/modules/nanites/code/machines/nanite_program_hub.dm"
+  C:\Voidcrew\tgstation.dme - [7148:1] | failed to find #include "voidcrew/modules/nanites/code/machines/nanite_programmer.dm"
+  C:\Voidcrew\tgstation.dme - [7148:1] | failed to find #include "voidcrew/modules/nanites/code/machines/nanite_programmer.dm"`
+	got := missingIncludes(message)
+	if len(got) != 2 || got[0] != "voidcrew/modules/nanites/code/machines/nanite_program_hub.dm" {
+		t.Fatalf("missing includes: %q", got)
+	}
+	if missingIncludes("parser error: unexpected token") != nil {
+		t.Fatal("other parser errors were treated as missing includes")
+	}
+}
