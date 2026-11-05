@@ -101,21 +101,3 @@ func (c *Catalog) Areas(location Location, anywhere bool) []AreaChoice {
 	}
 	return result
 }
-
-func (c *Catalog) TemplateAreas(t Template) []AreaChoice {
-	if len(c.Locations) == 0 {
-		return nil
-	}
-	family, _, _ := strings.Cut(strings.TrimPrefix(t.Type, Type+"/"), "/")
-	loc := Location{Type: Type + "/" + family}
-	if obj := c.Dme.Objects[t.Type]; obj != nil {
-		loc.Outdoor = obj.Vars.ValueV("default_area", "")
-	}
-	for _, l := range c.Locations {
-		if l.Name == t.Location {
-			loc = l
-			break
-		}
-	}
-	return c.Areas(loc, t.Group != "")
-}

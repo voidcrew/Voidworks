@@ -197,6 +197,32 @@ func TestRenderPreview(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		render(650)
 	}
+	// The view follows the canvas size until the user pans or zooms it.
+	camera := p.canvas.Render().Camera
+	fitted := camera.Scale
+	render(1000)
+	wider := camera.Scale
+	if wider <= fitted {
+		t.Fatalf("view did not refit a wider canvas: %v -> %v", fitted, wider)
+	}
+	io.SetMousePosition(imgui.Vec2{X: 500, Y: 500})
+	render(1000)
+	io.AddMouseWheelDelta(0, 1)
+	render(1000)
+	io.SetMousePosition(imgui.Vec2{X: -1000, Y: -1000})
+	zoomed := camera.Scale
+	if zoomed <= wider {
+		t.Fatalf("the wheel did not zoom: %v -> %v", wider, zoomed)
+	}
+	render(650)
+	if camera.Scale != zoomed {
+		t.Fatalf("resizing discarded the user's zoom: %v -> %v", zoomed, camera.Scale)
+	}
+	p.Fit()
+	render(650)
+	if camera.Scale != fitted {
+		t.Fatalf("Fit did not frame the map: %v, wanted %v", camera.Scale, fitted)
+	}
 	i := 0
 	for _, tile := range m.Tiles {
 		for _, instance := range tile.Instances() {

@@ -34,6 +34,12 @@ type Preview struct {
 	fit          bool
 	message      string
 	iconRevision uint64
+	// The editor environment, while its compiled appearances are still parsing.
+	pending *dmenv.Dme
+	// The canvas size last fitted to. Panning or zooming clears keepFit, and the
+	// view then stays where the user put it until Fit asks for it again.
+	fitSize imgui.Vec2
+	keepFit bool
 }
 
 func New(source *dmmap.Dmm, dme *dmenv.Dme) *Preview {
@@ -48,6 +54,17 @@ func NewWithOptions(source *dmmap.Dmm, dme *dmenv.Dme, options mappreview.Option
 // must not synchronously parse the whole game again just to show its context.
 func NewSprite(source *dmmap.Dmm, dme *dmenv.Dme) *Preview {
 	return newPreview(source, dme, mappreview.Options{Smoothing: true, Lighting: true, PoweredFixtures: true, ExteriorLight: true}, false)
+}
+
+// NewInstant never waits for the compiled parse. Until it finishes the map shows
+// its loaded appearances, then Process moves it over without touching the view.
+func NewInstant(source *dmmap.Dmm, dme *dmenv.Dme, options mappreview.Options) *Preview {
+	_, ready, _ := dme.PollPreviewEnvironment()
+	p := newPreview(source, dme, options, ready)
+	if !ready {
+		p.pending = dme
+	}
+	return p
 }
 
 func newPreview(source *dmmap.Dmm, dme *dmenv.Dme, options mappreview.Options, compile bool) *Preview {
@@ -85,6 +102,28 @@ func (p *Preview) ReplaceSource(source *dmmap.Dmm, editor *dmenv.Dme) {
 	p.source = mappreview.CompiledAppearances(source, editor, p.dme)
 	p.rebuild()
 }
+
+// Fit frames the whole map again on the next Process.
+func (p *Preview) Fit() { p.fit = true }
+
+func (p *Preview) pollAppearances() {
+	if p.pending == nil {
+		return
+	}
+	compiled, ready, err := p.pending.PollPreviewEnvironment()
+	if !ready {
+		return
+	}
+	editor := p.pending
+	p.pending = nil
+	if err != nil {
+		p.message = "Compiled appearances could not be loaded; showing editor sprites. " + err.Error()
+		return
+	}
+	p.source = mappreview.CompiledAppearances(p.source, editor, compiled)
+	p.dme = compiled
+	p.rebuild()
+}
 func (*Preview) ProcessUnit(u unit.Unit) bool { return mappreview.Visible(u.Instance().Prefab()) }
 
 func hasState(icon, state string) bool {
@@ -105,6 +144,7 @@ func (p *Preview) rebuild() {
 }
 
 func (p *Preview) Process() {
+	p.pollAppearances()
 	if p.iconRevision != dmicon.LayoutRevision {
 		p.rebuild()
 	}
@@ -133,7 +173,11 @@ func (p *Preview) Process() {
 	if changed {
 		p.rebuild()
 	}
-	imgui.TextDisabled(fmt.Sprintf("%d smoothed / %d lights | Current map snapshot", p.scene.Smoothed, p.scene.Lights))
+	status := "Current map snapshot"
+	if p.pending != nil {
+		status = "Loading game appearances..."
+	}
+	imgui.TextDisabled(fmt.Sprintf("%d smoothed / %d lights | %s", p.scene.Smoothed, p.scene.Lights, status))
 	if p.options.Lighting {
 		imgui.TextWrapped("Estimated lighting. Power simulation and runtime-created effects may differ in game.")
 	}
@@ -151,20 +195,22 @@ func (p *Preview) Process() {
 	size := imgui.ContentRegionAvail()
 	if size.X >= 1 && size.Y >= 1 {
 		camera := p.canvas.Render().Camera
-		if p.fit {
+		if p.fit || p.keepFit && size != p.fitSize {
 			width, height := float32(p.source.MaxX*dmmap.WorldIconSize), float32(p.source.MaxY*dmmap.WorldIconSize)
 			camera.Scale = min(size.X/width, size.Y/height) * .95
 			camera.ShiftX, camera.ShiftY = (size.X/camera.Scale-width)/2, (size.Y/camera.Scale-height)/2
-			p.fit = false
+			p.fit, p.keepFit, p.fitSize = false, true, size
 		}
 		p.control.Process(size)
 		if p.control.Moving() {
 			delta := imgui.CurrentIO().MouseDelta()
 			camera.Translate(delta.X/camera.Scale, -delta.Y/camera.Scale)
+			p.keepFit = false
 		}
 		if p.control.Active() {
 			_, wheel := imgui.CurrentIO().MouseWheel()
 			if wheel != 0 {
+				p.keepFit = false
 				mouse := imgui.MousePos().Minus(p.control.PosMin())
 				before := camera.Scale
 				camera.Scale = max(.02, min(32, camera.Scale*float32(math.Pow(math.Sqrt2, float64(wheel)))))

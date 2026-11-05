@@ -23,7 +23,6 @@ import (
 type App interface {
 	LoadedEnvironment() *dmenv.Dme
 	DoLoadResource(string)
-	DoSelectPrefabByPath(string)
 	SyncPrefabs()
 }
 
@@ -75,15 +74,26 @@ type WsRuin struct {
 	planetLevels                              int
 	planetHosts                               []planet.State
 	planetTraits                              map[string]bool
+	ruinPreview                               *wspreview.Preview
+	previewFile, previewError                 string
+	previewStale                              bool
+	previewLevels                             int
 }
 
 func New(app App) *WsRuin {
 	ws := &WsRuin{app: app, width: 24, height: 24}
 	ws.refresh()
+	if ws.catalog != nil {
+		// So a ruin clicked a moment from now already has its real appearances.
+		ws.catalog.Dme.WarmPreviewEnvironment()
+	}
 	return ws
 }
 
 func (ws *WsRuin) SpriteContext() (*dmmap.Dmm, *dmenv.Dme) {
+	if ws.previewVisible() && ws.ruinPreview != nil {
+		return ws.ruinPreview.SpriteContext()
+	}
 	if ws.planetPreview != nil {
 		return ws.planetPreview.SpriteContext()
 	}
@@ -118,11 +128,15 @@ func (ws *WsRuin) OnFocusChange(focused bool) {
 	if focused {
 		tools.SetEnabled(false)
 		ws.planetRefresh = true
+		ws.previewStale = true
 	}
 }
 func (ws *WsRuin) Dispose() {
 	if ws.planetPreview != nil {
 		ws.planetPreview.Dispose()
+	}
+	if ws.ruinPreview != nil {
+		ws.ruinPreview.Dispose()
 	}
 }
 
@@ -223,6 +237,7 @@ func (ws *WsRuin) selectRuin(t ruin.Template) {
 		ws.creating = false
 		ws.selected = &t
 		ws.viewOnPlanet = false
+		ws.previewStale = true
 		ws.message = ""
 		ws.form = form{}
 		ws.initial = ws.form
@@ -298,6 +313,7 @@ func (ws *WsRuin) Save() bool {
 	t := p.Template
 	ws.selected = &t
 	ws.creating = false
+	ws.previewStale = true
 	ws.initial = ws.form
 	ws.refresh()
 	ws.app.SyncPrefabs()
@@ -322,6 +338,9 @@ func (ws *WsRuin) Process() {
 	ws.library()
 	imgui.EndChild()
 	imgui.SameLine()
+	imgui.BeginGroup()
+	defer imgui.EndGroup()
+	ws.previewPanel()
 	workshop.Panel("ruin-details", imgui.Vec2{}, false)
 	if ws.creating {
 		ws.wizard()
@@ -626,15 +645,6 @@ func (ws *WsRuin) details() {
 		ws.beginPlanetView()
 	}
 	imgui.EndDisabled()
-	if ws.selected.Problem == "" && imgui.CollapsingHeader("Areas for this ruin") {
-		hint("Select an existing area, then paint it onto the map with the area tools.")
-		for _, area := range ws.catalog.TemplateAreas(*ws.selected) {
-			if button("Select " + area.Name) {
-				ws.app.DoLoadResource(ws.selected.File)
-				ws.app.DoSelectPrefabByPath(area.Path)
-			}
-		}
-	}
 	if ws.selected.Problem != "" {
 		imgui.TextWrapped(ws.selected.Problem)
 	}

@@ -14,22 +14,59 @@ type Dme struct {
 	RootDir  string
 	RootFile string
 	Objects  map[string]*Object
-	preview  *Dme
+	preview  *previewParse
+}
+
+// previewParse is one run of the compiled-appearance parser. env and err are
+// written before done closes and may only be read after it.
+type previewParse struct {
+	done chan struct{}
+	env  *Dme
+	err  error
 }
 
 func New(path string) (*Dme, error) {
 	return newEnvironment(path, sdmmparser.ParseEnvironment)
 }
 
+// The preview field belongs to the UI thread; only the parse itself runs apart.
+func (d *Dme) startPreviewParse() *previewParse {
+	if d.preview == nil {
+		parse := &previewParse{done: make(chan struct{})}
+		d.preview = parse
+		go func(path string) {
+			defer close(parse.done)
+			parse.env, parse.err = newEnvironment(path, sdmmparser.ParsePreviewEnvironment)
+		}(d.RootFile)
+	}
+	return d.preview
+}
+
 // PreviewEnvironment is cached for this loaded project and never replaces the
 // editor's definitions. Reopening the project invalidates the cache naturally.
+// It waits for the parse; a parse that failed runs again on the next call.
 func (d *Dme) PreviewEnvironment() (*Dme, error) {
-	if d.preview != nil {
-		return d.preview, nil
+	parse := d.startPreviewParse()
+	<-parse.done
+	if parse.err != nil {
+		d.preview = nil
 	}
-	var err error
-	d.preview, err = newEnvironment(d.RootFile, sdmmparser.ParsePreviewEnvironment)
-	return d.preview, err
+	return parse.env, parse.err
+}
+
+// WarmPreviewEnvironment starts the parse ahead of the first preview.
+func (d *Dme) WarmPreviewEnvironment() { d.startPreviewParse() }
+
+// PollPreviewEnvironment is PreviewEnvironment for callers that must not wait.
+// Until the parse finishes it returns ready as false.
+func (d *Dme) PollPreviewEnvironment() (env *Dme, ready bool, err error) {
+	parse := d.startPreviewParse()
+	select {
+	case <-parse.done:
+		return parse.env, true, parse.err
+	default:
+		return nil, false, nil
+	}
 }
 
 func newEnvironment(path string, parse func(string) (*sdmmparser.ObjectTreeType, error)) (*Dme, error) {

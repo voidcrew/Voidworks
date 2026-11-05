@@ -24,15 +24,13 @@ import (
 )
 
 type testApp struct {
-	dme      *dmenv.Dme
-	opened   string
-	selected string
+	dme    *dmenv.Dme
+	opened string
 }
 
-func (a *testApp) LoadedEnvironment() *dmenv.Dme    { return a.dme }
-func (a *testApp) DoLoadResource(file string)       { a.opened = file }
-func (a *testApp) DoSelectPrefabByPath(path string) { a.selected = path }
-func (a *testApp) SyncPrefabs()                     {}
+func (a *testApp) LoadedEnvironment() *dmenv.Dme { return a.dme }
+func (a *testApp) DoLoadResource(file string)    { a.opened = file }
+func (a *testApp) SyncPrefabs()                  {}
 
 func TestPropertyForm(t *testing.T) {
 	p := ruin.Properties{Name: "A ruin", Description: "A description", Cost: 2.5, MineralCost: 1, Weight: .125, AllowDuplicates: true}
@@ -103,6 +101,10 @@ func TestNativeRuinWorkshop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dmmap.PrefabStorage.Free()
+	dmicon.Cache.Free()
+	dmmap.Init(dme)
+	dmicon.Cache.SetRootDirPath(dme.RootDir)
 	app := &testApp{dme: dme}
 	ws := New(app)
 	if ws.catalog == nil || len(ws.catalog.Templates) < 10 {
@@ -125,13 +127,14 @@ func TestNativeRuinWorkshop(t *testing.T) {
 			t.Errorf("uneditable properties: %v", err)
 		}
 	}
+	windowWidth := float32(width)
 	render := func() {
 		gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 		gl.Viewport(0, 0, width, height)
 		gl.Clear(gl.COLOR_BUFFER_BIT)
 		imgui.NewFrame()
 		imgui.SetNextWindowPos(imgui.Vec2{})
-		imgui.SetNextWindowSize(imgui.Vec2{X: width, Y: height})
+		imgui.SetNextWindowSize(imgui.Vec2{X: windowWidth, Y: height})
 		imgui.BeginV("Ruin Workshop", nil, imgui.WindowFlagsNoResize|imgui.WindowFlagsNoMove|imgui.WindowFlagsNoCollapse)
 		ws.Process()
 		imgui.End()
@@ -167,15 +170,12 @@ func TestNativeRuinWorkshop(t *testing.T) {
 		}
 	}
 	capture("ruin-library")
+	testLibraryPreview(t, ws, render, capture, func(width float32) { windowWidth = width })
 	ws.selectRuin(ws.catalog.Templates[0])
 	capture("ruin-properties")
 	if ws.project == nil {
 		t.Fatal(ws.message)
 	}
-	dmmap.PrefabStorage.Free()
-	dmicon.Cache.Free()
-	dmmap.Init(dme)
-	dmicon.Cache.SetRootDirPath(dme.RootDir)
 	testPlanetRuinPreview(t, ws, capture)
 	ws.BeginNewRuin()
 	ws.form.Name = "Ruin Workshop Test"
