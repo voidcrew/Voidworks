@@ -170,6 +170,13 @@ func TestNativeRuinWorkshop(t *testing.T) {
 		}
 	}
 	capture("ruin-library")
+	ws.locationFilter = "Anywhere"
+	render()
+	if ws.locationFilter == "Anywhere" && !ws.catalog.HasAnywhere() {
+		t.Fatal("filtering by Anywhere with no Anywhere ruins")
+	}
+	ws.locationFilter = ""
+	captureLocationFilter(render, capture, "ruin-location-filter")
 	testLibraryPreview(t, ws, render, capture, func(width float32) { windowWidth = width })
 	ws.selectRuin(ws.catalog.Templates[0])
 	capture("ruin-properties")
@@ -288,6 +295,11 @@ func TestNativeRuinWorkshop(t *testing.T) {
 		}
 	}
 	capture("ruin-anywhere-properties")
+	ws.locationFilter = "Anywhere"
+	captureLocationFilter(render, capture, "ruin-location-filter-anywhere")
+	if !ws.catalog.HasAnywhere() || ws.locationFilter != "Anywhere" {
+		t.Fatal("an Anywhere ruin did not keep its filter")
+	}
 	removed := *ws.selected
 	r := ws.requestRemoval()
 	deadline := time.Now().Add(2 * time.Minute)
@@ -332,7 +344,28 @@ func TestNativeRuinWorkshop(t *testing.T) {
 		}
 	}
 	capture("ruin-after-removal")
+	if ws.locationFilter == "Anywhere" && !ws.catalog.HasAnywhere() {
+		t.Fatal("removing the last Anywhere ruin left its filter selected")
+	}
 	t.Logf("Created and reloaded fixtures in %s", fixture)
+}
+
+// captureLocationFilter opens the library's location dropdown with real clicks,
+// captures its options, then clicks away to close it.
+func captureLocationFilter(render func(), capture func(string), name string) {
+	io := imgui.CurrentIO()
+	defer io.SetMousePosition(imgui.Vec2{X: -1000, Y: -1000})
+	click := func(x, y float32) {
+		io.SetMousePosition(imgui.Vec2{X: x, Y: y})
+		render()
+		io.SetMouseButtonDown(0, true)
+		render()
+		io.SetMouseButtonDown(0, false)
+		render()
+	}
+	click(150, 299)
+	capture(name)
+	click(800, 850)
 }
 
 func exerciseCombo(t *testing.T) {

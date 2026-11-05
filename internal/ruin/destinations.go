@@ -34,6 +34,16 @@ func (t Template) PlacedIn(location string) bool {
 	return false
 }
 
+// HasAnywhere reports whether any ruin shares one map between every location.
+func (c *Catalog) HasAnywhere() bool {
+	for _, t := range c.Templates {
+		if t.Location == "Anywhere" {
+			return true
+		}
+	}
+	return false
+}
+
 // A shared map gets one library entry. Each destination still has a real subtype
 // of its own ruin family, as required by Voidcrew's planet and space loaders.
 func (c *Catalog) groupTemplates() {

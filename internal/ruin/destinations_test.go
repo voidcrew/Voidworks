@@ -36,6 +36,9 @@ func TestDestinationAreas(t *testing.T) {
 
 func TestAnywhereCreateReloadAndEdit(t *testing.T) {
 	c := environment(t)
+	if c.HasAnywhere() {
+		t.Fatal("a project without shared ruins reported some")
+	}
 	s := setup(c)
 	s.Anywhere, s.Area = true, "/area/template_noop"
 	p, err := New(c, s)
@@ -67,6 +70,9 @@ func TestAnywhereCreateReloadAndEdit(t *testing.T) {
 	shared := find(t, c, p.Template.Type)
 	if shared.Name != s.Properties.Name || shared.Location != "Anywhere" || len(shared.Variants) != 2 || len(c.Templates) != 3 {
 		t.Fatalf("shared map was not grouped: %+v", shared)
+	}
+	if !c.HasAnywhere() {
+		t.Fatal("shared ruin was not reported")
 	}
 	for _, loc := range c.Locations {
 		if !shared.PlacedIn(loc.Name) {

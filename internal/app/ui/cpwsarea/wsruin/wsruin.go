@@ -385,6 +385,10 @@ func (ws *WsRuin) library() {
 		ws.BeginNewRuin()
 	}
 	field("Search ruins", &ws.filter)
+	anywhere := ws.catalog.HasAnywhere()
+	if ws.locationFilter == "Anywhere" && !anywhere {
+		ws.locationFilter = ""
+	}
 	preview := ws.locationFilter
 	if preview == "" {
 		preview = "All locations"
@@ -393,7 +397,7 @@ func (ws *WsRuin) library() {
 		if imgui.Selectable("All locations") {
 			ws.locationFilter = ""
 		}
-		if imgui.Selectable("Anywhere") {
+		if anywhere && imgui.Selectable("Anywhere") {
 			ws.locationFilter = "Anywhere"
 		}
 		for _, loc := range ws.catalog.Locations {
