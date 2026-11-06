@@ -38,7 +38,9 @@ The editor offers a range of new features:
 
 ## How to Use
 
-Extract the Windows x64 ZIP and run **Voidworks.exe**. Choose **Open Project** and select your Voidcrew checkout's `tgstation.dme`. The project page offers map browsing, Ship Workshop, and new ship creation; project tools also live in the **Voidcrew** menu. See `START-HERE.txt` for details. Use **Help → Updates & Release Channel** to switch between Stable and Beta.
+Run the Windows x64 setup program, `Voidworks-<version>-windows-x64-setup.exe`. It installs for your account and doesn't need administrator rights. To keep a portable copy instead, extract the Windows x64 ZIP and run **Voidworks.exe**. Both kinds of copy update themselves.
+
+Choose **Open Project** and select your Voidcrew checkout's `tgstation.dme`. The project page offers map browsing, Ship Workshop, and new ship creation; project tools also live in the **Voidcrew** menu. See `START-HERE.txt` for details. Use **Help → Updates & Release Channel** to switch between Stable and Beta.
 
 Older StrongDMM builds need one manual download after the repository rename. Run **Voidworks.exe**; future updates use the Voidworks release channels.
 

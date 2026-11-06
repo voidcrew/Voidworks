@@ -2,7 +2,8 @@ VOIDWORKS - WINDOWS X64
 Version: 0.5.15
 
 START
-1. Extract the whole ZIP into its own writable folder, beside your stable editor.
+1. Run the Voidworks setup program. For a portable copy instead, extract the
+   whole ZIP into its own writable folder, beside your stable editor.
 2. Use a test branch or separate copy of your Voidcrew repository.
 3. Double-click Voidworks.exe, click Open Project, and select tgstation.dme.
    You can also drag a project folder, .dme, or .dmm onto Voidworks.exe.
@@ -24,6 +25,9 @@ when its version number is lower. Each installation receives updates for its
 installed channel. Automatic checks and downloads can be changed in Preferences
 > Application. Keep the installation folder writable. Save prompts appear
 before restarting, and your project reopens after the update.
+
+To remove an installed copy, use Windows Settings > Apps > Installed apps. Your
+settings and backups stay in your Voidworks profile.
 
 Existing Voidcrew editor settings and backups are copied into the Voidworks
 profile on first launch. Older StrongDMM builds need one manual download of

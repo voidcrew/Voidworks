@@ -34,6 +34,13 @@ BUILD-WINDOWS.ps1 accepts -Version and -Revision. For the packaged build,
 use the version and source_revision values from BUILD-INFO.json alongside
 the distributed executables. Go builds use -trimpath and -buildvcs=false.
 
+OPTIONAL WINDOWS INSTALLER
+Install Inno Setup 6, then point the script at an extracted release package:
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\BUILD-INSTALLER.ps1 -Package <folder>
+The folder must hold the package's files, including BUILD-INFO.json. The setup
+program and its SHA-256 file are written to dst/. The script is
+distribution/Voidworks.iss. Keep shipping the ZIP too: the updater installs from it.
+
 OPTIONAL NATIVE UI TEST
 Set SHIP_RENDER_TEST_DME to an absolute path to a Voidcrew tgstation.dme,
 then run:

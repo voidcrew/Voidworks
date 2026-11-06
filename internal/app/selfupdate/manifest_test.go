@@ -56,6 +56,18 @@ func TestReleaseValidation(t *testing.T) {
 	if err != nil || release.Version != "0.5.2" {
 		t.Fatalf("valid release: %+v %v", release, err)
 	}
+	var withInstaller githubRelease
+	if err := json.Unmarshal([]byte(fixture), &withInstaller); err != nil {
+		t.Fatal(err)
+	}
+	installer := withInstaller.Assets[0]
+	installer.Name = "Voidworks-0.5.2-windows-x64-setup.exe"
+	installer.URL = releaseDownloads + "0.5.2/" + installer.Name
+	withInstaller.Assets = append(withInstaller.Assets, installer)
+	data, _ := json.Marshal(withInstaller)
+	if release, err := parseRelease(data, "0.5.1"); err != nil || !strings.HasSuffix(release.URL, "-windows-x64.zip") {
+		t.Fatalf("setup program was mistaken for the update package: %+v %v", release, err)
+	}
 	for _, current := range []string{"0.5.2", "0.6.0"} {
 		if release, err := parseRelease([]byte(fixture), current); err != nil || release.Version != "" {
 			t.Fatalf("offered downgrade or reinstall: %+v %v", release, err)
